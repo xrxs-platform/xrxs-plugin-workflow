@@ -1,0 +1,6 @@
+type: backend
+key: employee.field.verify.idcode
+sourceApp: cornerstone
+pointcutEvent: 后处理
+scriptLanguage: Java
+source: src/backend/IdCodeStartValidator.java

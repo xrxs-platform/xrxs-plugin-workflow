@@ -1,0 +1,8 @@
+version: "1.0.0"
+author: "zouhwTest"
+created_at: "2026-05-10"
+icon: "assets/icon.png"
+description: "员工身份证号首位校验插件，阻止以0开头的非法身份证号保存"
+source: "src"
+endpoints:
+  - endpoints/employee.field.verify.idcode.yml

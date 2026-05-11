@@ -1,0 +1,44 @@
+{
+  "name": "@xrxs-plugin/xrxs-plugin-workflow",
+  "version": "0.1.0",
+  "description": "XRXS 插件研发总入口技能，覆盖需求澄清、PRD、可行性分析、开发、质量门禁、打包、测试发布与上线申请",
+  "type": "module",
+  "files": [
+    "SKILL.md",
+    "examples/**/*",
+    "references/**/*",
+    "README.md"
+  ],
+  "keywords": [
+    "xrxs",
+    "plugin",
+    "workflow",
+    "lowcode",
+    "agent-skills",
+    "skill",
+    "ai",
+    "cursor",
+    "trae",
+    "claude-code",
+    "codex",
+    "cline",
+    "opencode",
+    "codebuddy",
+    "openclaw",
+    "hr",
+    "saas"
+  ],
+  "author": "xrxs-plugin",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xrxs-platform/xrxs-plugin-workflow"
+  },
+  "bugs": {
+    "url": "https://github.com/xrxs-platform/xrxs-plugin-workflow/issues"
+  },
+  "homepage": "https://github.com/xrxs-platform/xrxs-plugin-workflow#readme",
+  "publishConfig": {
+    "access": "public"
+  }
+}
