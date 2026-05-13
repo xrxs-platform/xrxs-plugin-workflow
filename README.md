@@ -75,7 +75,7 @@ xrxs-plugin-workflow/
 ├── examples/
 │   ├── PRD.md                                 # 示例 PRD
 │   ├── 需求描述文档.md                         # 示例需求描述
-│   └── plugin-LDLJWPE35/                      # 示例插件工程
+│   └── plugin-ldljwpe35/                      # 示例插件工程
 └── references/                                # 子技能
     ├── requirements-translator/SKILL.md
     ├── prd-writer/SKILL.md
