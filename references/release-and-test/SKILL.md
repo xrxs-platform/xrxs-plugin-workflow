@@ -80,6 +80,8 @@ version: "0.1.0"
 - 打包前必须先检查质量门禁结果
 - 创建测试项目前必须确认已有可发布插件包
 - 发布测试环境时必须提供 `projectId + 插件包`
+- **同一 workflow 中，项目只创建一次**：`projectId` 必须从 Step 3 获取，后续所有操作复用此 `projectId`
+- **发布时严禁传入 `projectName`**：`plugin_mcp_release_test_deploy` 的工具参数中虽有 `projectName` 字段，但传入后会导致服务端自动创建重复项目，必须只传 `projectId`
 - 人工测试是必经环节，不得省略
 - 测试不通过时必须明确回流到开发实现阶段
 - 只有测试通过后才能推动上线申请
@@ -121,6 +123,14 @@ version: "0.1.0"
 
 若项目创建失败，不得继续发布测试环境。
 
+#### 创建前必须检查是否已有同名项目
+
+在调用 `plugin_mcp_release_projects_create` 之前，必须先确认当前 workflow 中是否已存在同名项目：
+
+- 如果当前 Step 3 是首次执行（之前未创建过项目），正常创建
+- 如果当前 workflow 中已存在该项目（例如因重试、断点续传等原因），**必须复用已有的 `projectId`，不得再次创建**
+- 如果发现有重复项目记录（如之前因 `release_test_deploy` 误传 `projectName` 导致），以 Step 3 创建的那个为准（无 `测试部署：` 前缀者），忽略 deploy 侧自动创建的项目
+
 ### Step 4: Publish To Test Environment
 
 使用以下最小输入执行测试发布：
@@ -134,6 +144,15 @@ version: "0.1.0"
 - 发布目标环境
 - 发布结果
 - 若失败则记录失败原因
+
+#### ⚠️ 严禁在发布时传入 projectName（防止重复创建项目）
+
+调用 `plugin_mcp_release_test_deploy` 时，**必须且只能传入 Step 3 返回的 `projectId`**，严禁同时传入 `projectName` 参数。原因：
+
+- 服务端 `/release/test/deploy` 接口在收到 `projectName` 时，可能会**内部自动创建一个新项目**（备注前缀 `测试部署：`），而非复用已有的 `projectId`
+- 这将导致同一插件在一次流程中产生 2 条同名项目记录
+
+**正确做法**：只传 `projectId`、`artifactRef`/`sourcePackageId`、`targetEnv`、`operator`、`deployNotes` 等发布相关参数，不传 `projectName`。
 
 ### Step 5: Coordinate Manual Testing
 
@@ -368,6 +387,22 @@ version: "0.1.0"
 - `测试通过`：进入上线申请阶段
 - `测试不通过`：回到 `plugin-implementation`
 - `发布失败 / 项目创建失败 / 打包失败`：回到对应问题处理阶段
+
+## 重复项目创建故障排查
+
+### 现象
+
+同一 workflow 中出现 2 条同名项目记录，一条无前缀，一条备注为 `测试部署：{项目名}`，创建时间仅相差几十秒。
+
+### 根因
+
+`plugin_mcp_release_test_deploy` 工具同时接受 `projectId` 和 `projectName` 参数。如果调用 deploy 时同时传入了 `projectName`，服务端 `/release/test/deploy` 接口内部会**自动创建一个新项目**（备注前缀 `测试部署：`），导致与 Step 3 创建的项目重复。
+
+### 解决方法
+
+1. **预防**：调用 deploy 时只传 `projectId`，不传 `projectName`（见 Step 4 警告）
+2. **清理**：如果已产生重复项目，以 Step 3 创建的无 `测试部署：` 前缀的项目为准，后续操作使用该项目的 `projectId`
+3. **验证**：对外可使用 `plugin_mcp_release_status_get` 按 `projectId` 查询发布状态
 
 ## First-Version Scope
 
