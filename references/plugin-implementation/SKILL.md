@@ -1,4 +1,4 @@
-﻿---
+---
 name: "plugin-implementation"
 description: "Implements XRXS plugins from approved PRDs and feasibility results. Use when requirements are confirmed and the workflow is ready to build plugin code and configuration."
 description_zh: "根据已确认的 PRD 和可行性结论实现 XRXS 插件代码。适用于需求与可行性均已明确，准备进入项目初始化、代码开发、配置生成和工程落地的阶段。"
@@ -89,8 +89,11 @@ version: "0.2.0"
 能力依据与查阅顺序如下：
 
 1. 先同步本地 `plugin-dev-kit`
-   - 若目录不存在：先执行 `git clone`
-   - 若目录已存在：先执行 `git pull`
+   - `plugin-dev-kit` 的有效目录固定为**当前工作目录**下的 `./plugin-dev-kit`
+   - 不得复用工作区外已经存在的 `plugin-dev-kit` 绝对路径
+   - 若当前工作目录下的 `plugin-dev-kit` 不存在：必须在当前工作目录执行 `git clone ... plugin-dev-kit`
+   - 若当前工作目录下的 `plugin-dev-kit` 已存在：必须进入该目录执行 `git pull`
+   - 若同步失败，必须暂停实现，不得改用工作区外目录继续编码
 2. 先阅读：
    - `plugin-dev-kit/README.md`
 3. 织入点索引优先阅读：
@@ -493,6 +496,7 @@ git pull
 - 不得用 `plugin_mcp_initialize` 代替开发项目初始化
 - 不得再次创建 `plugin-{Snowflake ID}` 目录
 - 不得绕过 `plugin-dev-kit` 文档和 SDK 自行猜测实现
+- 不得读取、引用或默认复用当前工作目录之外的 `plugin-dev-kit` 目录
 - 不得伪造编译通过、扫描通过或系统返回结果
 
 ## Output Contract

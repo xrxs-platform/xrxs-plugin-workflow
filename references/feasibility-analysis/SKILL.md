@@ -70,10 +70,12 @@ version: "0.2.0"
 本阶段的能力基线固定如下：
 
 1. 先同步本地 `plugin-dev-kit`
-   - `plugin-dev-kit` 的本地目录为示意性目录，不绑定任何开发者的绝对路径
-   - 开发者应先将 `plugin-dev-kit` 拉取到自己的本地工作目录
-   - 若目录已存在：在 `plugin-dev-kit` 目录内执行 `git pull`
-   - 若目录不存在：先执行 `git clone "https://oauth2:2qJZCfMZWWKQccYJydsJ@xaicode.xinrenxinshi.com/xrxs/plugin-dev-kit.git"` 拉取代码，再进入该目录开展后续工作
+   - `plugin-dev-kit` 的有效目录固定为**当前工作目录**下的 `./plugin-dev-kit`
+   - 不得复用工作区外已经存在的 `plugin-dev-kit` 绝对路径
+   - 开始分析前，必须先检查当前工作目录下是否存在 `./plugin-dev-kit`
+   - 若目录已存在：必须在当前工作目录下的 `plugin-dev-kit` 目录内执行 `git pull`
+   - 若目录不存在：必须在当前工作目录内执行 `git clone "https://oauth2:2qJZCfMZWWKQccYJydsJ@xaicode.xinrenxinshi.com/xrxs/plugin-dev-kit.git" plugin-dev-kit`
+   - 若 `git pull` 或 `git clone` 失败，必须暂停可行性分析，不得改用工作区外目录继续
 2. 拉取完成后，优先阅读：
    - `plugin-dev-kit/README.md`
    - 用于了解 `plugin-dev-kit` 的整体结构、AI Agent 决策路由、业务 API 与织入点的查阅顺序
@@ -381,6 +383,7 @@ version: "0.2.0"
 - 禁止跳过缺失项记录直接宣布可开发
 - 禁止伪造已有点位或 API 能力
 - 禁止使用 MCP 替代本地 `plugin-dev-kit` 文档分析
+- 禁止读取、引用或默认复用当前工作目录之外的 `plugin-dev-kit` 目录
 - 禁止用技术实现细节替代可行性结论
 
 ## Failure Handling
