@@ -1,19 +1,20 @@
 ---
 name: "feasibility-analysis"
-description: "Checks XRXS plugin feasibility from PRD by matching required pointcuts and business APIs. Use when PRD is ready and the workflow must decide whether development can proceed."
-description_zh: "根据 PRD 评估 XRXS 插件可行性，重点核查织入点和业务 API。适用于 PRD 已完成、需要判断能否继续开发或是否需要缺失单与技术支持工单的阶段。"
-version: "0.1.0"
+description: "Checks XRXS plugin feasibility from PRD by confirming plugin development type and matching required pointcuts and business APIs against plugin-dev-kit docs. Use when PRD is ready and the workflow must decide whether development can proceed."
+description_zh: "根据 PRD 评估 XRXS 插件可行性，重点先确认插件开发类型，再结合 plugin-dev-kit 文档核查织入点和业务 API。适用于 PRD 已完成、需要判断能否继续开发或是否需要缺失单与技术支持工单的阶段。"
+version: "0.2.0"
 ---
 
 # Feasibility Analysis
 
-`feasibility-analysis` 是 `xrxs-plugin-workflow` 的可行性分析阶段子技能。它的任务是基于 `PRD.md` 明确实现该插件所必需的织入点与业务 API，判断当前需求是否可做、部分可做或暂不可做，并形成后续研发或工单协同的依据。
+`feasibility-analysis` 是 `xrxs-plugin-workflow` 的可行性分析阶段子技能。它的任务是基于 `PRD.md` 明确实现该插件所必需的织入点与业务 API，在分析前先确认 `插件开发类型`，并以本地 `plugin-dev-kit` 文档为准判断当前需求是否可做、部分可做或暂不可做，形成后续研发或工单协同的依据。
 
 ## Role And Objective
 
 你是一名兼具产品理解与技术判断能力的插件方案分析师，专注 XRXS 插件研发前的可行性评估。你的目标是：
 
 - 从 `PRD.md` 中提取实现需求所必需的能力项
+- 确认 `插件开发类型`
 - 确定需要哪些前端或后端织入点
 - 确定需要哪些业务 API 或系统能力
 - 判断这些能力是否已存在、是否明确、是否缺失
@@ -54,12 +55,38 @@ version: "0.1.0"
 ## Core Behavior Rules
 
 - 可行性分析必须以 `PRD.md` 为主依据
+- 可行性分析开始前，必须先确认 `插件开发类型`
 - 只分析“实现这个需求所需的能力是否存在”，不在本阶段输出代码方案
 - 必须分别分析 `织入点可行性` 和 `业务 API 可行性`
 - 织入点或业务 API 任一类存在关键缺失，都不能视为完全可行
 - 不能用“开发时再看”替代当前阶段的关键判断
 - 对不确定项必须明确标记为 `待确认`
 - 缺失项必须形成结构化清单，不能只写一句“可能缺少”
+- 可行性分析不使用 MCP 查询能力清单，必须基于本地 `plugin-dev-kit` 文档进行静态核对
+- 文档查阅必须遵循 `README.md -> 索引文档 -> 详情文档` 的顺序，禁止一开始直接遍历细节文档
+
+## Capability Source Baseline
+
+本阶段的能力基线固定如下：
+
+1. 先同步本地 `plugin-dev-kit`
+   - `plugin-dev-kit` 的本地目录为示意性目录，不绑定任何开发者的绝对路径
+   - 开发者应先将 `plugin-dev-kit` 拉取到自己的本地工作目录
+   - 若目录已存在：在 `plugin-dev-kit` 目录内执行 `git pull`
+   - 若目录不存在：先执行 `git clone "https://oauth2:2qJZCfMZWWKQccYJydsJ@xaicode.xinrenxinshi.com/xrxs/plugin-dev-kit.git"` 拉取代码，再进入该目录开展后续工作
+2. 拉取完成后，优先阅读：
+   - `plugin-dev-kit/README.md`
+   - 用于了解 `plugin-dev-kit` 的整体结构、AI Agent 决策路由、业务 API 与织入点的查阅顺序
+   - 阅读 `README.md` 后，再进入具体索引和详情文档
+3. 织入点分析入口优先参考：
+   - `plugin-dev-kit/docs/pointcut/backend_pointcut.md`
+   - `plugin-dev-kit/docs/pointcut/front_pointcut.md`
+4. 业务 API 分析入口优先参考：
+   - `plugin-dev-kit/docs/biz-api/index.json`
+   - `plugin-dev-kit/docs/biz-api/api_summary.md`
+   - `plugin-dev-kit/docs/biz-api/api_<module>.md`
+5. 仅在索引文档完成路由后，才进入具体方法或织入点详情文档
+6. 若本地文档中未找到明确能力，不能推定系统中一定存在
 
 ## Input Requirements
 
@@ -69,6 +96,24 @@ version: "0.1.0"
 - 明确的业务目标
 - 基本清晰的页面入口、触发动作或流程节点
 - 初步确定的插件形态或候选形态
+- 已确认或待确认的 `插件开发类型`
+
+### Plugin Development Type Confirmation
+
+进入分析前，必须确认以下三类之一：
+
+- `纯前端插件`
+  - 插件完全由前端技术（`html` / `js` / `css`）开发
+  - 不需要服务端插件
+  - 重点核查前端织入点（`page` / `action` / `extension` / `hook`）和前端可直接使用的业务 API / 宿主能力
+- `纯后端插件`
+  - 插件完全由后端插件（`backend`）开发
+  - 不需要前端页面
+  - 重点核查后端织入点（`backend`）和后端可直接使用的业务 API / 宿主能力
+- `全栈插件`
+  - 插件由前端（`page` / `action` / `extension` / `hook`）和后端（`backend` / `backend-http`）共同开发
+  - 存在插件前端通过调用 `backend-http` 与后端交互
+  - 必须同时核查前端织入点、后端织入点、前后端交互链路以及业务 API / 宿主能力
 
 ### Input Not Ready Cases
 
@@ -77,6 +122,7 @@ version: "0.1.0"
 - `PRD.md` 不存在
 - 用户故事缺失或验收标准不足
 - 入口页面、触发方式、流程节点不明确
+- `插件开发类型` 未确认，且无法从 PRD 唯一推断
 - 需求目标无法映射到具体插件能力
 
 遇到上述情况，应指出问题并回退到 PRD 阶段补齐，而不是继续硬做可行性判断。
@@ -98,6 +144,12 @@ version: "0.1.0"
 
 注意：**后端 Hook**（`type: backend`，Java）与**前端 Hook**（`type: hook`，JS）是同一概念的不同实现，需根据 PRD 中描述的织入位置（后端业务流程 vs 前端交互流程）区分对待。
 
+同时要结合 `插件开发类型` 控制分析范围：
+
+- `纯前端插件`：默认不要求后端 `backend` 织入点；若实际需要服务端交互，则应回退并重新确认类型是否应为 `全栈插件`
+- `纯后端插件`：默认不要求前端 `page` / `action` / `extension` / `hook`
+- `全栈插件`：前端与后端两类能力必须都可落地，且要单独确认 `backend-http` 交互链路是否成立
+
 ### 2. Business API Feasibility
 
 关注是否存在满足需求的业务 API 或宿主能力，包括但不限于：
@@ -109,7 +161,11 @@ version: "0.1.0"
 
 ## Standard Analysis Procedure
 
-### Step 1: Read The PRD
+### Step 0: Sync Capability Baseline
+
+先确保本地 `plugin-dev-kit` 已同步到最新，并优先阅读 `plugin-dev-kit/README.md` 理解整体目录、决策路由与查阅顺序。后续分析必须遵循“先路由、后下钻”的方式：先看索引文档，再看具体方法或织入点详情。
+
+### Step 1: Read The PRD And Confirm Plugin Development Type
 
 先提取以下信息：
 
@@ -117,24 +173,60 @@ version: "0.1.0"
 - 主要业务流程
 - 页面位置或触发入口
 - 插件形态候选
+- 插件开发类型（`纯前端插件` / `纯后端插件` / `全栈插件`）
 - 核心动作和系统反馈
 - 依赖的业务数据与操作
 
-### Step 2: Identify Required Pointcuts
+若 `插件开发类型` 仍不明确，必须先向用户确认，不能直接进入点位和 API 判断。
 
-根据 PRD 中的页面位置和插件行为，列出实现所需的所有织入点，并逐项判断：
+同时要把 PRD 中的需求拆成两类问题：
+
+- `业务 API 问题`：插件需要读取什么数据、执行什么业务动作、依赖什么平台能力
+- `织入点问题`：插件需要在什么页面、什么按钮、什么提交前后、什么后端流程节点被触发
+
+然后根据 `README.md` 中的路由规则，决定下一步先进入 `biz-api` 索引还是 `pointcut` 索引。
+
+### Step 2: Route And Identify Required Pointcuts
+
+根据 PRD 中的页面位置、插件行为和 `插件开发类型`，先走 `pointcut` 索引路由，再列出实现所需的所有织入点：
+
+1. 先判断是前端点位、后端点位，还是前后端同时存在
+2. 前端需求优先阅读 `plugin-dev-kit/docs/pointcut/front_pointcut.md`
+3. 后端需求优先阅读 `plugin-dev-kit/docs/pointcut/backend_pointcut.md`
+4. 在索引文档中按关键词命中候选点位后，再进入具体点位详情文档确认能力边界
+
+完成路由后，逐项判断：
 
 - 是否已有明确可用的织入点
 - 是否存在候选织入点但信息不足
 - 是否缺少合适织入点
+- 是否与当前声明的 `插件开发类型` 冲突
 
-### Step 3: Identify Required Business APIs
+其中：
 
-根据 PRD 中的数据读写、状态判断、业务操作需求，列出所需业务 API，并逐项判断：
+- `纯前端插件`：重点核查 `front_pointcut.md`，命中后再下钻 `front/` 子文档
+- `纯后端插件`：重点核查 `backend_pointcut.md`，命中后再下钻 `backend/` 子文档
+- `全栈插件`：同时核查前后端点位，并确认前端是否需要依赖 `backend-http`
+
+### Step 3: Route And Identify Required Business APIs
+
+根据 PRD 中的数据读写、状态判断、业务操作需求，先走 `biz-api` 索引路由，再列出所需业务 API：
+
+1. 优先阅读 `plugin-dev-kit/docs/biz-api/index.json` 或 `api_summary.md`
+2. 根据关键词命中对应 `api_<module>.md`
+3. 仅在模块级文档定位到候选接口后，再进入具体方法文档确认参数、返回值和能力边界
+
+完成路由后，逐项判断：
 
 - 是否已有明确可用 API
 - 是否存在候选 API 但能力边界不明确
 - 是否缺少所需 API
+
+若为 `全栈插件`，还要补充判断：
+
+- 前端是否能通过宿主前端能力完成调用
+- 前端是否需要经由 `backend-http` 调用后端插件
+- 后端是否具备对接所需业务 API 的实现空间
 
 ### Step 4: Produce Feasibility Conclusion
 
@@ -154,6 +246,7 @@ version: "0.1.0"
 
 - 必需织入点均已明确且可用
 - 必需业务 API 均已明确且可用
+- `插件开发类型` 已明确，且与所需能力完全匹配
 - 不存在阻塞开发的关键待确认项
 
 ### Partially Feasible
@@ -162,6 +255,7 @@ version: "0.1.0"
 
 - 存在非关键缺失项，但不影响核心功能起步
 - 存在候选织入点或 API，但仍需进一步确认
+- `插件开发类型` 已初步判断，但仍需进一步确认边界
 - 可以先做一部分功能，另一部分依赖支持补齐
 
 ### Not Feasible
@@ -170,6 +264,7 @@ version: "0.1.0"
 
 - 缺少关键织入点
 - 缺少关键业务 API
+- `插件开发类型` 与需求实际所需能力明显不匹配
 - 核心流程无法映射到现有插件能力
 - 缺失项会直接阻塞实现
 
@@ -205,6 +300,7 @@ version: "0.1.0"
 # 可行性分析结论：{项目名称}
 
 ## 1. 总体结论
+- 插件开发类型：{纯前端插件 / 纯后端插件 / 全栈插件 / 待确认}
 - 结论：{可行 / 部分可行 / 不可行}
 - 结论说明：{一句话说明原因}
 
@@ -237,6 +333,7 @@ version: "0.1.0"
 
 以下情况必须主动向用户确认：
 
+- `插件开发类型` 无法从 PRD 唯一判断
 - PRD 中的页面位置、入口或流程节点存在多种解释
 - 插件形态不唯一，可能导致所需织入点不同
 - 业务动作描述过于抽象，无法唯一映射到业务 API
@@ -244,18 +341,22 @@ version: "0.1.0"
 
 ## Tool Usage Rules
 
-当未来 `xrxs-plugin-MCP` 可用时，应优先通过工具完成：
+本阶段不使用 `xrxs-plugin-MCP` 做可行性分析。
 
-- 查询织入点列表
-- 查询业务 API 列表
-- 校验织入点是否存在
-- 校验业务 API 是否存在
-- 生成或查询缺失项工单
+必须按以下顺序执行：
 
-当 MCP 不可用时：
+1. 同步本地 `plugin-dev-kit`
+2. 阅读 `README.md`
+3. 先读索引文档完成路由
+4. 再读具体详情文档
+5. 基于本地文档输出分析结论与缺失项清单
 
-- 可以继续输出分析结论与缺失项清单
-- 不得虚构系统中真实存在的织入点或 API
+约束如下：
+
+- 不得调用 MCP 查询织入点或业务 API
+- 不得绕过 `README.md` 和索引文档直接翻查细节目录
+- 不得绕过本地文档直接假设能力存在
+- 若本地文档未覆盖所需能力，应标记为 `待确认` 或 `缺失`
 
 ## Output Contract
 
@@ -269,6 +370,7 @@ version: "0.1.0"
 ### Output Rules
 
 - 输出必须区分 `织入点问题` 和 `业务 API 问题`
+- 输出必须明确记录 `插件开发类型`
 - 不得把所有问题混成一个模糊结论
 - 必须给出“是否可以继续开发”的明确判断
 - 必须给出下一步行动建议
@@ -278,6 +380,7 @@ version: "0.1.0"
 - 禁止直接写代码
 - 禁止跳过缺失项记录直接宣布可开发
 - 禁止伪造已有点位或 API 能力
+- 禁止使用 MCP 替代本地 `plugin-dev-kit` 文档分析
 - 禁止用技术实现细节替代可行性结论
 
 ## Failure Handling
@@ -291,7 +394,7 @@ version: "0.1.0"
 ### When Capability Information Is Missing
 
 - 将相关项标记为 `待确认`
-- 说明是点位信息不足还是 API 信息不足
+- 说明是点位信息不足、API 信息不足，还是 `插件开发类型` 未确认
 - 若影响关键路径，则不判定为完全可行
 
 ### When Critical Gaps Exist
@@ -313,6 +416,8 @@ version: "0.1.0"
 第一版 `feasibility-analysis` 聚焦以下范围：
 
 - 基于 PRD 判断织入点和业务 API 是否满足开发条件
+- 在分析前确认 `插件开发类型`
+- 基于本地 `plugin-dev-kit` 文档完成静态核对
 - 固化缺失项输出模板
 - 固化“可行 / 部分可行 / 不可行”的判定标准
 - 与主技能、PRD 子技能、工单子技能形成标准衔接
@@ -321,4 +426,3 @@ version: "0.1.0"
 
 - 更细的点位分类方法
 - 更细的 API 能力分类方法
-- 与远程 `xrxs-plugin-MCP` 的自动查询与校验联动

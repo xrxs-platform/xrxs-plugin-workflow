@@ -264,8 +264,8 @@ stateDiagram-v2
 
 | 用户场景 | 子技能标识 | 显式引用文件 | 进入条件 | 退出条件 | 下一跳 | 动作前必须确认 |
 |----------|------------|--------------|----------|----------|--------|----------------|
-| 需求还模糊，只是描述想法 | `requirements-translator` | `references/requirements-translator/SKILL.md` | 需求缺少角色、场景、入口、目标、约束中的任一关键项 | 产出 `需求描述文档.md` 或形成足以写 PRD 的结构化需求输入 | `prd-writer` | 角色、场景、目标、约束 |
-| 需求已基本清晰，但没有正式 PRD | `prd-writer` | `references/prd-writer/SKILL.md` | 已有清晰需求、`需求描述文档.md` 或等效输入，且足以展开 PRD | 产出完整 `PRD.md`，并具备进入可行性分析的必要信息 | `feasibility-analysis` | 用户故事、验收标准、边界、依赖 |
+| 需求还模糊，只是描述想法 | `requirements-translator` | `references/requirements-translator/SKILL.md` | 需求缺少角色、场景、入口、目标、约束中的任一关键项 | 产出 `SRS.md` 或形成足以写 PRD 的结构化需求输入 | `prd-writer` | 角色、场景、目标、约束 |
+| 需求已基本清晰，但没有正式 PRD | `prd-writer` | `references/prd-writer/SKILL.md` | 已有清晰需求、`SRS.md` 或等效输入，且足以展开 PRD | 产出完整 `PRD.md`，并具备进入可行性分析的必要信息 | `feasibility-analysis` | 用户故事、验收标准、边界、依赖 |
 | 需要判断织入点或业务 API 是否可用 | `feasibility-analysis` | `references/feasibility-analysis/SKILL.md` | 已有 `PRD.md`，且需要识别实现所需点位与业务 API | 输出 `可行 / 部分可行 / 不可行` 结论，并形成缺失项或开发准入结论 | `support-ticket` 或 `plugin-implementation` | 缺失项、阻塞项、解决路径 |
 | 需要创建、补充或跟踪技术支持工单 | `support-ticket` | `references/support-ticket/SKILL.md` | 已存在 `织入点缺失单`、`业务 API 缺失单` 或明确阻塞项 | 工单已解决并具备恢复主流程条件，或已驳回且已明确回退方案 | `feasibility-analysis` 或 `prd-writer` | 工单状态、恢复条件、是否缩减范围 |
 | 已有 PRD 且可行性已通过，要开发插件 | `plugin-implementation` | `references/plugin-implementation/SKILL.md` | `PRD.md` 完整、可行性通过、关键工单已解决、插件类型明确 | 开发完成，且静态分析、编译、安全扫描、代码自审全部通过 | `release-and-test` | 插件类型、目录结构、文档依据、质量门禁 |
@@ -307,7 +307,7 @@ stateDiagram-v2
 
 ### Requirements And PRD Rule
 
-- `需求描述文档.md` 与 `PRD.md` 由当前 LLM 直接生成和更新
+- `SRS.md` 与 `PRD.md` 由当前 LLM 直接生成和更新
 - Requirements Stage 与 PRD Stage 不依赖 MCP 能力
 - 只有从可行性分析阶段开始，才优先进入 MCP 驱动模式
 
@@ -348,7 +348,7 @@ stateDiagram-v2
 
 | 阶段 | 优先 MCP 分组 | 允许调用目的 | 不应越权调用的分组 |
 |------|---------------|--------------|--------------------|
-| Requirements Stage | 无 | 由当前 LLM 生成结构化需求输入与 `需求描述文档.md` | `feasibility`、`build`、`release` |
+| Requirements Stage | 无 | 由当前 LLM 生成结构化需求输入与 `SRS.md` | `feasibility`、`build`、`release` |
 | PRD Stage | 无 | 由当前 LLM 生成或更新 `PRD.md` | `feasibility`、`build`、`release` |
 | Feasibility Analysis Stage | `feasibility`、`workflow` | 查询织入点、查询业务 API、形成缺失项、同步可行性状态 | `build`、`release` |
 | Support Ticket Stage | `support-ticket`、`workflow` | 创建工单、查询工单、更新工单状态、恢复状态同步 | `build` |
@@ -381,7 +381,7 @@ MCP 调用结果必须和 `Workflow State Model` 一一对应：
 
 MCP 调用结果必须参与门禁决策，而不能脱离门禁单独使用：
 
-- 当前 LLM 生成的 `需求描述文档.md` 与 `PRD.md` 参与 `文档门禁`
+- 当前 LLM 生成的 `SRS.md` 与 `PRD.md` 参与 `文档门禁`
 - `feasibility` 与 `support-ticket` 的结果参与 `可行性门禁`
 - `build` 的结果参与 `工程门禁`
 - `release` 的结果参与 `发布门禁`
@@ -391,7 +391,7 @@ MCP 调用结果必须参与门禁决策，而不能脱离门禁单独使用：
 
 MCP 调用结果必须映射到主技能的标准输出物：
 
-- 当前 LLM -> `需求描述文档.md`、`PRD.md`
+- 当前 LLM -> `SRS.md`、`PRD.md`
 - `feasibility` -> 可行性结论、缺失单
 - `support-ticket` -> 技术支持工单、状态更新、恢复建议
 - `build` -> 静态分析结果、编译结果、安全扫描结果、插件包
@@ -500,7 +500,7 @@ MCP 调用结果必须映射到主技能的标准输出物：
 
 标准输出：
 
-- `需求描述文档.md` 或结构化需求摘要
+- `SRS.md` 或结构化需求摘要
 - 明确的角色、场景、目标、约束、验收标准
 
 禁止跳过条件：
@@ -521,7 +521,7 @@ MCP 调用结果必须映射到主技能的标准输出物：
 
 最小输入：
 
-- 清晰需求或 `需求描述文档.md`
+- 清晰需求或 `SRS.md`
 - 已知的角色、场景、目标、边界
 
 标准输出：
@@ -742,7 +742,7 @@ MCP 调用结果必须映射到主技能的标准输出物：
 | 子技能标识 | 显式引用文件 | 主要职责 | 上游输入 | 默认下游 |
 |------------|--------------|----------|----------|----------|
 | `requirements-translator` | `references/requirements-translator/SKILL.md` | 需求澄清与需求描述文档 | 用户原始需求 | `prd-writer` |
-| `prd-writer` | `references/prd-writer/SKILL.md` | 生成 `PRD.md` | 清晰需求或 `需求描述文档.md` | `feasibility-analysis` |
+| `prd-writer` | `references/prd-writer/SKILL.md` | 生成 `PRD.md` | 清晰需求或 `SRS.md` | `feasibility-analysis` |
 | `feasibility-analysis` | `references/feasibility-analysis/SKILL.md` | 校验织入点与业务 API 可行性 | `PRD.md` | `support-ticket` 或 `plugin-implementation` |
 | `support-ticket` | `references/support-ticket/SKILL.md` | 创建和跟踪技术支持工单 | 缺失单、阻塞项 | `feasibility-analysis` 或 `plugin-implementation` |
 | `plugin-implementation` | `references/plugin-implementation/SKILL.md` | 实现插件代码与配置 | `PRD.md`、可行性结论 | `release-and-test` |
@@ -755,7 +755,7 @@ MCP 调用结果必须映射到主技能的标准输出物：
 职责：
 
 - 将模糊需求转换为结构化需求描述
-- 产出 `需求描述文档.md`
+- 产出 `SRS.md`
 - 为 PRD 阶段提供清晰输入
 
 ### `prd-writer`
@@ -875,7 +875,7 @@ MCP 调用结果必须映射到主技能的标准输出物：
 
 | 阶段 | 必需输出物 | 可选输出物 | 进入下一阶段前的验收条件 |
 |------|------------|------------|--------------------------|
-| 需求阶段 | `需求描述文档.md` 或结构化需求摘要；明确的角色、场景、入口、目标、约束、验收标准 | 需求澄清记录；插件类型初步判断；风险提示 | 需求信息足以支撑 PRD 编写；关键角色、场景、目标、约束不再缺失 |
+| 需求阶段 | `SRS.md` 或结构化需求摘要；明确的角色、场景、入口、目标、约束、验收标准 | 需求澄清记录；插件类型初步判断；风险提示 | 需求信息足以支撑 PRD 编写；关键角色、场景、目标、约束不再缺失 |
 | PRD 阶段 | `PRD.md`；用户故事；验收标准；页面入口与交互流程；范围边界与依赖 | 插件形态候选；Mermaid 交互流程图；待确认项列表 | `PRD.md` 结构完整；关键入口、动作、依赖、验收标准齐备；足以进入可行性分析 |
 | 可行性阶段 | 可行性分析结论；`织入点缺失单`；`业务 API 缺失单`；开发准入建议 | 风险与影响清单；替代方案建议；范围缩减建议 | 已分别完成织入点与业务 API 判断；关键缺失项已记录；结论不再是 `待确认` |
 | 工单协同阶段 | `插件技术支持工单`；工单状态更新；主流程恢复建议 | 优先级说明；替代方案说明；驳回原因记录 | 若进入开发主线，工单状态必须已明确解除阻塞；若未解除阻塞，则不得进入开发 |

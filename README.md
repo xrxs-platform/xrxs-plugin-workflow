@@ -74,7 +74,7 @@ xrxs-plugin-workflow/
 ├── SKILL.md                                   # 主入口技能
 ├── examples/
 │   ├── PRD.md                                 # 示例 PRD
-│   ├── 需求描述文档.md                         # 示例需求描述
+│   ├── SRS.md                         # 示例需求描述
 │   └── plugin-ldljwpe35/                      # 示例插件工程
 └── references/                                # 子技能
     ├── requirements-translator/SKILL.md
