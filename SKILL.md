@@ -1,7 +1,7 @@
 ---
 name: "xrxs-plugin-workflow"
 description: "Guides XRXS plugin workflow across requirement clarification, PRD, feasibility, implementation, packaging, testing, release, and support. Use for end-to-end XRXS plugin work."
-description_zh: "XRXS 插件研发总入口技能，覆盖需求澄清、PRD、可行性分析、开发、质量门禁、打包、测试发布与上线申请。"
+description_zh: "XRXS 插件研发总入口技能，覆盖需求澄清、PRD、可行性分析、开发、质量门禁、基于 GitLab 的测试发布与上线申请。"
 version: "0.1.0"
 ---
 
@@ -21,7 +21,7 @@ xrxs-plugin-workflow/
     ├── prd-writer/SKILL.md                    # PRD 生成
     ├── feasibility-analysis/SKILL.md          # 织入点 / 业务 API 可行性分析
     ├── plugin-implementation/SKILL.md         # 插件开发实现
-    ├── release-and-test/SKILL.md              # 打包、建项目、测试发布、上线申请
+    ├── release-and-test/SKILL.md              # 基于 projectId 的测试发布、人工测试、上线申请
     └── support-ticket/SKILL.md                # 技术支持工单协同
 ```
 
@@ -44,7 +44,7 @@ xrxs-plugin-workflow/
 
 在以下场景中，应优先启用 `xrxs-plugin-workflow`：
 
-- 用户提到 `XRXS 插件`、`插件开发`、`插件流程`、`织入点`、`业务 API`、`插件打包`、`测试发布`、`上线申请`
+- 用户提到 `XRXS 插件`、`插件开发`、`插件流程`、`织入点`、`业务 API`、`测试发布`、`上线申请`
 - 用户希望从模糊想法开始，逐步推进到可交付插件
 - 用户需要判断某个插件需求是否可行
 - 用户已经有需求或 PRD，希望继续开发插件代码
@@ -78,11 +78,27 @@ XRXS 插件研发必须遵循以下主流程，不得跳过关键门禁：
 9. 静态分析
 10. 编译
 11. 安全扫描
-12. 按规范打包插件
-13. 创建插件开发项目并拿到 `projectId`
-14. 使用 `projectId + 插件包` 发布到测试环境
-15. 开发者在测试环境人工测试
-16. 测试通过后发起上线申请
+12. 开发者将代码提交并推送到 GitLab
+13. 使用 implementation 阶段已有的 `projectId` 发布到测试环境
+14. 开发者在测试环境人工测试
+15. 测试通过后发起上线申请
+
+### Workflow ID Rule
+
+- 进入 XRXS 插件主流程时，应立即生成一个全局唯一的 `workflowId`
+- `workflowId` 代表一整条插件研发流程实例，不等同于 `projectId`
+- 建议格式：`wf_` + 语义化前缀 + 短随机串，例如 `wf_att_leave_guard_a1b2c3`
+- 同一个插件需求从可行性分析、工单协同、开发实现、发布测试到上线申请，均应复用同一个 `workflowId`
+- 若当前仅执行轻量链路，也可暂时不传 `workflowId`；但一旦启用 workflow 能力，后续阶段必须持续复用，不得中途更换
+- `projectId` 在 implementation 项目初始化时生成；`workflowId` 在主流程启动时生成，二者职责不同
+
+### GitLab Archive Rule
+
+- 当 implementation 阶段完成 `project-{projectId}` 初始化后，研发文档必须随真实 Git 项目一起归档到 GitLab
+- 至少包括：`docs/SRS.md`、`docs/PRD.md`、`docs/feasibility-analysis.md`、`README.md`
+- `README.md` 必须包含用户原始需求背景，以及基于研发文档整理出的插件概括性功能方案
+- 若上游文档在开发过程中发生更新，必须同步更新 `project-{projectId}/docs/` 中的同名文件，并与代码一起提交
+- 发布前必须确认 `project-{projectId}/docs/` 中的研发文档与当前实现依据一致，不得只提交代码而遗漏文档归档
 
 ### Mandatory Loop Rules
 
@@ -112,7 +128,7 @@ XRXS 插件研发必须遵循以下主流程，不得跳过关键门禁：
 - `implementation_in_progress`: 开发进行中
 - `quality_failed`: 静态分析、编译、安全扫描或自审未通过
 - `implementation_ready`: 开发与质量门禁通过，可进入发布测试
-- `release_in_progress`: 打包、创建项目、发布测试环境进行中
+- `release_in_progress`: 基于 `projectId` 发布测试环境进行中
 - `release_blocked`: 发布阶段受阻
 - `testing_in_progress`: 测试环境人工测试进行中
 - `testing_failed`: 人工测试未通过
@@ -136,8 +152,8 @@ XRXS 插件研发必须遵循以下主流程，不得跳过关键门禁：
 | `implementation_in_progress` | 质量门禁失败 | `quality_failed` | 是 | 回流开发修复 |
 | `implementation_in_progress` | 开发完成且质量门禁通过 | `implementation_ready` | 是 | 可进入发布测试 |
 | `quality_failed` | 修复并重新通过门禁 | `implementation_in_progress` | 否 | 需要重新验证 |
-| `implementation_ready` | 开始打包或发布 | `release_in_progress` | 是 | 进入发布测试 |
-| `release_in_progress` | 打包/建项目/发布失败 | `release_blocked` | 是 | 需定位问题并决定是在发布侧重试还是回流开发 |
+| `implementation_ready` | 开始发布 | `release_in_progress` | 是 | 进入发布测试 |
+| `release_in_progress` | 编译/拉取代码/发布失败 | `release_blocked` | 是 | 需定位问题并决定是在发布侧重试还是回流开发 |
 | `release_in_progress` | 发布成功并进入测试 | `testing_in_progress` | 是 | 等待人工测试 |
 | `release_blocked` | 发布侧问题已修复或已具备重试条件 | `release_in_progress` | 否 | 在发布阶段重试，无需默认回流开发 |
 | `release_blocked` | 根因定位为代码或配置问题 | `implementation_in_progress` | 否 | 回流开发修复 |
@@ -170,8 +186,8 @@ stateDiagram-v2
     implementation_in_progress --> quality_failed: 质量门禁失败
     quality_failed --> implementation_in_progress: 修复并重新通过门禁
 
-    implementation_ready --> release_in_progress: 开始打包或发布
-    release_in_progress --> release_blocked: 打包/建项目/发布失败
+    implementation_ready --> release_in_progress: 开始发布
+    release_in_progress --> release_blocked: 编译/拉取代码/发布失败
     release_in_progress --> testing_in_progress: 发布成功并进入测试
     release_blocked --> release_in_progress: 发布侧修复后重试
     release_blocked --> implementation_in_progress: 根因位于代码或配置
@@ -241,6 +257,16 @@ stateDiagram-v2
 3. 判断是否缺少 `PRD.md`、织入点信息、业务 API 信息、插件类型、约束条件
 4. 判断是否存在必须先解决的前置阻塞项
 
+### Workspace Dependency Rule
+
+- 任何需要引用本地参考库的阶段，必须优先使用**当前工作目录**下的依赖目录，而不是工作区外的历史目录或任意绝对路径。
+- 当可行性分析或开发实现阶段需要使用 `plugin-dev-kit` 时，固定使用当前工作目录下的 `./plugin-dev-kit`。
+- 进入可行性分析或开发实现前，必须先检查当前工作目录下是否存在 `plugin-dev-kit`：
+  - 若存在：必须在该目录内执行 `git pull`
+  - 若不存在：必须在当前工作目录内执行 `git clone ... plugin-dev-kit`
+- 在 `./plugin-dev-kit` 完成同步前，不得开始读取其文档或 SDK。
+- 禁止读取、引用或默认复用当前工作目录之外的 `plugin-dev-kit` 目录，即使该目录在本机已存在也不允许直接作为本次流程依据。
+
 ### Universal Guardrails
 
 - 始终使用中文与用户沟通，除非用户明确要求其他语言
@@ -264,12 +290,12 @@ stateDiagram-v2
 
 | 用户场景 | 子技能标识 | 显式引用文件 | 进入条件 | 退出条件 | 下一跳 | 动作前必须确认 |
 |----------|------------|--------------|----------|----------|--------|----------------|
-| 需求还模糊，只是描述想法 | `requirements-translator` | `references/requirements-translator/SKILL.md` | 需求缺少角色、场景、入口、目标、约束中的任一关键项 | 产出 `需求描述文档.md` 或形成足以写 PRD 的结构化需求输入 | `prd-writer` | 角色、场景、目标、约束 |
-| 需求已基本清晰，但没有正式 PRD | `prd-writer` | `references/prd-writer/SKILL.md` | 已有清晰需求、`需求描述文档.md` 或等效输入，且足以展开 PRD | 产出完整 `PRD.md`，并具备进入可行性分析的必要信息 | `feasibility-analysis` | 用户故事、验收标准、边界、依赖 |
+| 需求还模糊，只是描述想法 | `requirements-translator` | `references/requirements-translator/SKILL.md` | 需求缺少角色、场景、入口、目标、约束中的任一关键项 | 产出 `SRS.md` 或形成足以写 PRD 的结构化需求输入 | `prd-writer` | 角色、场景、目标、约束 |
+| 需求已基本清晰，但没有正式 PRD | `prd-writer` | `references/prd-writer/SKILL.md` | 已有清晰需求、`SRS.md` 或等效输入，且足以展开 PRD | 产出完整 `PRD.md`，并具备进入可行性分析的必要信息 | `feasibility-analysis` | 用户故事、验收标准、边界、依赖 |
 | 需要判断织入点或业务 API 是否可用 | `feasibility-analysis` | `references/feasibility-analysis/SKILL.md` | 已有 `PRD.md`，且需要识别实现所需点位与业务 API | 输出 `可行 / 部分可行 / 不可行` 结论，并形成缺失项或开发准入结论 | `support-ticket` 或 `plugin-implementation` | 缺失项、阻塞项、解决路径 |
 | 需要创建、补充或跟踪技术支持工单 | `support-ticket` | `references/support-ticket/SKILL.md` | 已存在 `织入点缺失单`、`业务 API 缺失单` 或明确阻塞项 | 工单已解决并具备恢复主流程条件，或已驳回且已明确回退方案 | `feasibility-analysis` 或 `prd-writer` | 工单状态、恢复条件、是否缩减范围 |
-| 已有 PRD 且可行性已通过，要开发插件 | `plugin-implementation` | `references/plugin-implementation/SKILL.md` | `PRD.md` 完整、可行性通过、关键工单已解决、插件类型明确 | 开发完成，且静态分析、编译、安全扫描、代码自审全部通过 | `release-and-test` | 插件类型、目录结构、文档依据、质量门禁 |
-| 需要打包、创建项目、发布测试环境或根据测试决定上线 | `release-and-test` | `references/release-and-test/SKILL.md` | 开发完成且质量门禁通过，存在可打包工程状态 | 获得插件包与 `projectId`，完成测试环境发布，并得到人工测试结论 | 上线申请或回流 `plugin-implementation` | 插件包、`projectId`、发布参数、测试结论 |
+| 已有 PRD 且可行性已通过，要开发插件 | `plugin-implementation` | `references/plugin-implementation/SKILL.md` | `PRD.md` 完整、可行性通过、关键工单已解决、插件类型明确 | 开发完成，且编译与代码自审通过 | `release-and-test` | 插件类型、目录结构、文档依据、质量门禁 |
+| 需要发布测试环境、查询发布状态或根据测试决定上线 | `release-and-test` | `references/release-and-test/SKILL.md` | 开发完成且质量门禁通过，已持有 `projectId` | 完成测试环境发布，并得到人工测试结论 | 上线申请或回流 `plugin-implementation` | `projectId`、发布参数、测试结论 |
 
 ### Routing Decision Notes
 
@@ -292,9 +318,7 @@ stateDiagram-v2
 - 查询业务 API 列表和可用性
 - 创建或查询技术支持工单
 - 触发静态分析、编译、安全扫描
-- 打包插件
-- 创建插件开发项目
-- 发布插件包到测试环境
+- 基于 `projectId` 发布插件到测试环境
 - 查询发布状态和工单状态
 
 ### Fallback Principle
@@ -307,7 +331,7 @@ stateDiagram-v2
 
 ### Requirements And PRD Rule
 
-- `需求描述文档.md` 与 `PRD.md` 由当前 LLM 直接生成和更新
+- `SRS.md` 与 `PRD.md` 由当前 LLM 直接生成和更新
 - Requirements Stage 与 PRD Stage 不依赖 MCP 能力
 - 只有从可行性分析阶段开始，才优先进入 MCP 驱动模式
 
@@ -317,8 +341,8 @@ stateDiagram-v2
 
 - `feasibility`: 织入点、业务 API、缺失项校验
 - `support-ticket`: 工单创建、查询、关闭
-- `build`: 静态分析、编译、安全扫描、打包
-- `release`: 项目创建、测试环境发布、发布状态查询
+- `build`: 静态分析、编译、安全扫描
+- `release`: 基于 `projectId` 的测试环境发布、发布状态查询
 - `workflow`: 流程推进、节点回退、阶段状态同步
 
 ## MCP Capability Contract
@@ -333,8 +357,8 @@ stateDiagram-v2
 |----------|----------|--------------|--------------|
 | `feasibility` | 织入点查询、业务 API 查询、缺失项识别、可行性校验 | Feasibility Analysis Stage | `feasibility_pending`、`feasibility_blocked`、`feasibility_ready` |
 | `support-ticket` | 工单创建、查询、状态更新、关闭 | Support Ticket Stage | `support_ticket_open`、`support_ticket_resolved` |
-| `build` | 静态分析、编译、安全扫描、打包 | Implementation Stage、Quality Stage | `implementation_in_progress`、`quality_failed`、`implementation_ready` |
-| `release` | 创建项目、获取 `projectId`、发布测试环境、查询发布状态、上线申请 | Release And Test Stage | `release_in_progress`、`release_blocked`、`testing_in_progress`、`launch_ready` |
+| `build` | 静态分析、编译、安全扫描 | Implementation Stage、Quality Stage | `implementation_in_progress`、`quality_failed`、`implementation_ready` |
+| `release` | 基于 `projectId` 发布测试环境、查询发布状态、上线申请 | Release And Test Stage | `release_in_progress`、`release_blocked`、`testing_in_progress`、`launch_ready` |
 | `workflow` | 流程状态读写、阶段推进、阻塞标记、恢复标记 | 全阶段 | 全状态 |
 
 ### Capability Invocation Rules
@@ -348,12 +372,12 @@ stateDiagram-v2
 
 | 阶段 | 优先 MCP 分组 | 允许调用目的 | 不应越权调用的分组 |
 |------|---------------|--------------|--------------------|
-| Requirements Stage | 无 | 由当前 LLM 生成结构化需求输入与 `需求描述文档.md` | `feasibility`、`build`、`release` |
+| Requirements Stage | 无 | 由当前 LLM 生成结构化需求输入与 `SRS.md` | `feasibility`、`build`、`release` |
 | PRD Stage | 无 | 由当前 LLM 生成或更新 `PRD.md` | `feasibility`、`build`、`release` |
 | Feasibility Analysis Stage | `feasibility`、`workflow` | 查询织入点、查询业务 API、形成缺失项、同步可行性状态 | `build`、`release` |
 | Support Ticket Stage | `support-ticket`、`workflow` | 创建工单、查询工单、更新工单状态、恢复状态同步 | `build` |
 | Implementation Stage | `build`、`workflow` | 静态分析、编译、安全扫描、质量状态更新 | `release`，除非已进入 `implementation_ready` |
-| Release And Test Stage | `release`、`workflow` | 打包、建项目、发布测试环境、发布状态更新、上线申请 | 无，除非发生回流 |
+| Release And Test Stage | `release`、`workflow` | 基于 `projectId` 发布测试环境、发布状态更新、上线申请 | 无，除非发生回流 |
 
 ### Input And Output Contract
 
@@ -363,8 +387,8 @@ stateDiagram-v2
 |----------|----------|----------|--------------------|
 | `feasibility` | `PRD.md`、目标功能点、插件形态候选 | 点位查询结果、API 查询结果、缺失项、可行性结论 | 查询条件、缺失项、阻塞说明 |
 | `support-ticket` | 缺失单、问题类型、项目上下文 | 工单内容、工单状态、恢复建议 | 工单参数、状态未知原因、阻塞影响 |
-| `build` | 代码状态、配置文件、目标构建动作 | 静态分析结果、编译结果、安全扫描结果、打包结果 | 错误日志、失败位置、相关版本与配置状态 |
-| `release` | 插件包、`projectId` 或建项参数、目标环境 | 项目创建结果、发布结果、发布状态、上线申请结果 | 发布参数、失败原因、环境信息 |
+| `build` | 代码状态、配置文件、目标构建动作 | 静态分析结果、编译结果、安全扫描结果 | 错误日志、失败位置、相关版本与配置状态 |
+| `release` | `projectId`、目标环境 | 发布结果、发布状态、上线申请结果 | 发布参数、失败原因、环境信息 |
 | `workflow` | 当前状态、目标动作、上下文标识 | 状态迁移结果、阻塞标记、恢复标记、阶段同步结果 | 原状态、目标状态、迁移失败原因 |
 
 ### State Integration Rules
@@ -381,7 +405,7 @@ MCP 调用结果必须和 `Workflow State Model` 一一对应：
 
 MCP 调用结果必须参与门禁决策，而不能脱离门禁单独使用：
 
-- 当前 LLM 生成的 `需求描述文档.md` 与 `PRD.md` 参与 `文档门禁`
+- 当前 LLM 生成的 `SRS.md` 与 `PRD.md` 参与 `文档门禁`
 - `feasibility` 与 `support-ticket` 的结果参与 `可行性门禁`
 - `build` 的结果参与 `工程门禁`
 - `release` 的结果参与 `发布门禁`
@@ -391,10 +415,10 @@ MCP 调用结果必须参与门禁决策，而不能脱离门禁单独使用：
 
 MCP 调用结果必须映射到主技能的标准输出物：
 
-- 当前 LLM -> `需求描述文档.md`、`PRD.md`
+- 当前 LLM -> `SRS.md`、`PRD.md`
 - `feasibility` -> 可行性结论、缺失单
 - `support-ticket` -> 技术支持工单、状态更新、恢复建议
-- `build` -> 静态分析结果、编译结果、安全扫描结果、插件包
+- `build` -> 静态分析结果、编译结果、安全扫描结果
 - `release` -> `projectId`、测试环境发布结果、上线申请结果
 - `workflow` -> 状态变更记录、阻塞态、恢复态、终态同步结果
 
@@ -500,7 +524,7 @@ MCP 调用结果必须映射到主技能的标准输出物：
 
 标准输出：
 
-- `需求描述文档.md` 或结构化需求摘要
+- `SRS.md` 或结构化需求摘要
 - 明确的角色、场景、目标、约束、验收标准
 
 禁止跳过条件：
@@ -521,7 +545,7 @@ MCP 调用结果必须映射到主技能的标准输出物：
 
 最小输入：
 
-- 清晰需求或 `需求描述文档.md`
+- 清晰需求或 `SRS.md`
 - 已知的角色、场景、目标、边界
 
 标准输出：
@@ -600,7 +624,7 @@ MCP 调用结果必须映射到主技能的标准输出物：
 阶段目标：
 
 - 根据 `PRD.md`、可行性结论和官方文档完成插件代码与配置实现
-- 形成可进入打包发布的工程状态
+- 形成可进入测试发布的工程状态
 
 最小输入：
 
@@ -632,7 +656,7 @@ MCP 调用结果必须映射到主技能的标准输出物：
 阶段目标：
 
 - 对已完成实现的插件执行质量门禁校验
-- 形成进入打包发布前的工程准入结论
+- 形成进入测试发布前的工程准入结论
 
 最小输入：
 
@@ -662,16 +686,16 @@ MCP 调用结果必须映射到主技能的标准输出物：
 阶段目标：
 
 - 将已完成开发且通过质量门禁的插件推进到可测试、可上线申请状态
-- 完成打包、创建项目、测试环境发布、人工测试和上线申请准备
+- 完成基于 `projectId` 的测试环境发布、人工测试和上线申请准备
 
 最小输入：
 
-- 可打包的插件工程状态
+- 可发布的插件工程状态
+- `projectId`
 - 静态分析、编译、安全扫描、代码自审全部通过的结论
 
 标准输出：
 
-- 插件包
 - `projectId`
 - 测试环境发布结果
 - 人工测试结论
@@ -679,7 +703,7 @@ MCP 调用结果必须映射到主技能的标准输出物：
 
 禁止跳过条件：
 
-- 未完成打包
+- 未完成最新代码提交
 - 未拿到 `projectId`
 - 未完成测试环境发布
 - 人工测试未通过
@@ -698,8 +722,8 @@ MCP 调用结果必须映射到主技能的标准输出物：
 |----------|----------|----------|--------------|--------------|
 | 文档门禁 | 需求阶段、PRD 阶段 | 需求已结构化；`PRD.md` 完整；用户故事、验收标准、范围边界、依赖齐备 | `requirements-translator` 或 `prd-writer` | 需求不清、无 PRD、无验收标准时，禁止进入可行性分析和开发 |
 | 可行性门禁 | 可行性阶段 | 已分别完成织入点与业务 API 判断；关键缺失项已记录；结论明确为 `可行` 或具备受控的下一步策略 | `prd-writer`、`feasibility-analysis` 或 `support-ticket` | 织入点不明确、业务 API 不明确、缺失项未记录时，禁止进入开发 |
-| 工程门禁 | 开发阶段、质量阶段 | 静态分析通过；编译通过；安全扫描通过；代码自审完成 | `plugin-implementation` | 静态分析、编译、安全扫描、代码自审任一未通过时，禁止进入打包和发布 |
-| 发布门禁 | 发布阶段、上线阶段 | 打包成功；已拿到 `projectId`；测试环境发布成功；人工测试通过；上线申请信息完整 | `release-and-test` 或 `plugin-implementation` | 未打包、无 `projectId`、发布失败、人工测试未通过时，禁止进入上线申请 |
+| 工程门禁 | 开发阶段、质量阶段 | 静态分析通过；编译通过；安全扫描通过；代码自审完成 | `plugin-implementation` | 静态分析、编译、安全扫描、代码自审任一未通过时，禁止进入发布 |
+| 发布门禁 | 发布阶段、上线阶段 | 已拿到 `projectId`；最新代码已提交 GitLab；测试环境发布成功；人工测试通过；上线申请信息完整 | `release-and-test` 或 `plugin-implementation` | 无 `projectId`、未提交 Git、发布失败、人工测试未通过时，禁止进入上线申请 |
 
 ### Gate Enforcement Rules
 
@@ -742,11 +766,11 @@ MCP 调用结果必须映射到主技能的标准输出物：
 | 子技能标识 | 显式引用文件 | 主要职责 | 上游输入 | 默认下游 |
 |------------|--------------|----------|----------|----------|
 | `requirements-translator` | `references/requirements-translator/SKILL.md` | 需求澄清与需求描述文档 | 用户原始需求 | `prd-writer` |
-| `prd-writer` | `references/prd-writer/SKILL.md` | 生成 `PRD.md` | 清晰需求或 `需求描述文档.md` | `feasibility-analysis` |
+| `prd-writer` | `references/prd-writer/SKILL.md` | 生成 `PRD.md` | 清晰需求或 `SRS.md` | `feasibility-analysis` |
 | `feasibility-analysis` | `references/feasibility-analysis/SKILL.md` | 校验织入点与业务 API 可行性 | `PRD.md` | `support-ticket` 或 `plugin-implementation` |
 | `support-ticket` | `references/support-ticket/SKILL.md` | 创建和跟踪技术支持工单 | 缺失单、阻塞项 | `feasibility-analysis` 或 `plugin-implementation` |
 | `plugin-implementation` | `references/plugin-implementation/SKILL.md` | 实现插件代码与配置 | `PRD.md`、可行性结论 | `release-and-test` |
-| `release-and-test` | `references/release-and-test/SKILL.md` | 打包、建项目、测试发布、上线申请 | 代码与质量门禁结论 | 上线申请或回流开发 |
+| `release-and-test` | `references/release-and-test/SKILL.md` | 测试发布、人工测试、上线申请 | 代码与质量门禁结论、`projectId` | 上线申请或回流开发 |
 
 ### `requirements-translator`
 
@@ -755,7 +779,7 @@ MCP 调用结果必须映射到主技能的标准输出物：
 职责：
 
 - 将模糊需求转换为结构化需求描述
-- 产出 `需求描述文档.md`
+- 产出 `SRS.md`
 - 为 PRD 阶段提供清晰输入
 
 ### `prd-writer`
@@ -802,7 +826,7 @@ MCP 调用结果必须映射到主技能的标准输出物：
 
 职责：
 
-- 执行质量门禁后的打包、项目创建、测试发布、人工测试收口
+- 执行质量门禁后的测试发布、人工测试收口
 - 在测试通过后准备上线申请
 
 ## Human-In-The-Loop Rules
@@ -831,9 +855,7 @@ MCP 调用结果必须映射到主技能的标准输出物：
 | 静态分析失败 | 开发阶段、质量阶段 | 分析错误列表；受影响文件；修复建议；当前代码版本或状态 | `plugin-implementation` | 否 |
 | 编译失败 | 开发阶段、质量阶段 | 编译错误信息；失败位置；最近变更；可复现条件 | `plugin-implementation` | 否 |
 | 安全扫描失败 | 质量阶段 | 扫描问题列表；风险级别；受影响模块；修复状态 | `plugin-implementation` | 否 |
-| 打包失败 | 发布阶段 | 打包错误原因；插件版本；包信息；相关配置状态 | `plugin-implementation` 或 `release-and-test` | 否 |
-| 项目创建失败 | 发布阶段 | 创建参数；失败原因；是否已生成部分结果；重试条件 | `release-and-test` | 否 |
-| 测试环境发布失败 | 发布阶段 | 发布参数；失败原因；目标环境；插件包与 `projectId` 信息 | `release-and-test` 或 `plugin-implementation` | 否 |
+| 测试环境发布失败 | 发布阶段 | 发布参数；失败原因；目标环境；`projectId` 信息 | `release-and-test` 或 `plugin-implementation` | 否 |
 | 人工测试失败 | 发布阶段、上线阶段 | 失败用例；问题摘要；受影响功能点；复现路径；测试结论 | `plugin-implementation` | 否 |
 | MCP 不可用 | 任意依赖系统能力的阶段 | 当前阶段；原计划动作；缺失的系统能力；人工待执行清单 | 当前阶段保留，转人工方案 | 有条件允许 |
 
@@ -849,7 +871,7 @@ MCP 调用结果必须映射到主技能的标准输出物：
 - `需求信息不完整` 和 `PRD 信息不足` 都属于前置失败，必须优先处理，不能靠后续阶段反向补齐
 - `可行性失败` 不能通过“先开发核心部分”默认绕过，除非已明确缩减范围并重新确认
 - `静态分析失败`、`编译失败`、`安全扫描失败` 都属于工程阻塞失败，必须回流开发阶段
-- `打包失败`、`项目创建失败`、`测试环境发布失败` 都属于发布阻塞失败，不能进入人工测试或上线阶段
+- `测试环境发布失败` 属于发布阻塞失败，不能进入人工测试或上线阶段
 - `人工测试失败` 直接阻断上线申请，必须回流开发实现
 - `MCP 不可用` 不等于流程失败，但必须显式转换为人工执行清单，且不得伪造系统结果
 
@@ -860,7 +882,7 @@ MCP 调用结果必须映射到主技能的标准输出物：
 1. 先解决前置输入失败：需求、PRD
 2. 再解决能力可行性失败：织入点、业务 API、工单阻塞
 3. 再解决工程失败：静态分析、编译、安全扫描
-4. 最后解决发布失败：打包、项目创建、测试发布、人工测试
+4. 最后解决发布失败：测试发布、人工测试
 
 ### Continue-Or-Stop Rules
 
@@ -875,13 +897,13 @@ MCP 调用结果必须映射到主技能的标准输出物：
 
 | 阶段 | 必需输出物 | 可选输出物 | 进入下一阶段前的验收条件 |
 |------|------------|------------|--------------------------|
-| 需求阶段 | `需求描述文档.md` 或结构化需求摘要；明确的角色、场景、入口、目标、约束、验收标准 | 需求澄清记录；插件类型初步判断；风险提示 | 需求信息足以支撑 PRD 编写；关键角色、场景、目标、约束不再缺失 |
+| 需求阶段 | `SRS.md` 或结构化需求摘要；明确的角色、场景、入口、目标、约束、验收标准 | 需求澄清记录；插件类型初步判断；风险提示 | 需求信息足以支撑 PRD 编写；关键角色、场景、目标、约束不再缺失 |
 | PRD 阶段 | `PRD.md`；用户故事；验收标准；页面入口与交互流程；范围边界与依赖 | 插件形态候选；Mermaid 交互流程图；待确认项列表 | `PRD.md` 结构完整；关键入口、动作、依赖、验收标准齐备；足以进入可行性分析 |
 | 可行性阶段 | 可行性分析结论；`织入点缺失单`；`业务 API 缺失单`；开发准入建议 | 风险与影响清单；替代方案建议；范围缩减建议 | 已分别完成织入点与业务 API 判断；关键缺失项已记录；结论不再是 `待确认` |
 | 工单协同阶段 | `插件技术支持工单`；工单状态更新；主流程恢复建议 | 优先级说明；替代方案说明；驳回原因记录 | 若进入开发主线，工单状态必须已明确解除阻塞；若未解除阻塞，则不得进入开发 |
 | 开发阶段 | 插件代码；`manifest.yml`；`endpoints/*.yml`；必要资源与文档；代码自审结论 | 测试用例；README 更新；实现依据清单；配置校验记录 | 开发完成；代码与文档依据一致；配置注册完整；具备进入质量门禁的工程状态 |
-| 质量阶段 | 静态分析结果；编译结果；安全扫描结果 | 人工检查记录；问题修复记录；残余风险说明 | 静态分析通过；编译通过；安全扫描通过；不存在阻塞打包的质量问题 |
-| 发布阶段 | 插件包；`projectId`；测试环境发布结果；人工测试结论 | 发布参数记录；测试问题清单；重试记录 | 已成功打包；已拿到 `projectId`；测试环境发布成功；人工测试结论明确 |
+| 质量阶段 | 静态分析结果；编译结果；安全扫描结果 | 人工检查记录；问题修复记录；残余风险说明 | 静态分析通过；编译通过；安全扫描通过；不存在阻塞发布的质量问题 |
+| 发布阶段 | `projectId`；测试环境发布结果；人工测试结论 | 发布参数记录；测试问题清单；重试记录 | 已拿到 `projectId`；测试环境发布成功；人工测试结论明确 |
 | 上线阶段 | `插件上线申请单` 或上线前检查结论 | 发布说明；版本变更说明；测试摘要 | 人工测试通过；无阻塞上线问题；上线申请信息完整 |
 
 ### Output Validation Rules
@@ -899,7 +921,7 @@ MCP 调用结果必须映射到主技能的标准输出物：
 2. 有完整 `PRD.md`，才能进入可行性分析
 3. 有明确可行性结论，才能进入开发
 4. 有完整代码与配置，才能进入质量门禁
-5. 质量门禁通过，才能进入打包与发布
+5. 质量门禁通过，且最新代码已提交 GitLab，才能进入发布
 6. 已完成测试环境发布且人工测试通过，才能进入上线申请
 
 ## First-Version Scope
