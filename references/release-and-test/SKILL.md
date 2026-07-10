@@ -1,22 +1,21 @@
 ---
 name: "release-and-test"
-description: "Packages XRXS plugins, publishes test releases, coordinates manual testing, and prepares launch applications. Use after implementation passes quality gates."
-description_zh: "负责 XRXS 插件的打包、创建项目、测试环境发布、人工测试协同与上线申请准备。适用于开发已完成并通过质量门禁，准备进入发布测试阶段的场景。"
-version: "0.1.0"
+description: "Publishes XRXS plugins from GitLab projects to the test environment, coordinates manual testing, and prepares launch applications. Use after implementation passes quality gates."
+description_zh: "负责基于 GitLab 开发项目将 XRXS 插件发布到测试环境、协同人工测试并准备上线申请。适用于开发已完成并通过质量门禁，准备进入发布测试阶段的场景。"
+version: "0.2.1"
 ---
 
 # Release And Test
 
-`release-and-test` 是 `xrxs-plugin-workflow` 的发布测试阶段子技能。它的任务是在开发实现完成并通过质量门禁后，按标准流程完成插件打包、创建插件开发项目、发布到测试环境、组织人工测试，并在测试通过后推动上线申请。
+`release-and-test` 是 `xrxs-plugin-workflow` 的发布测试阶段子技能。它的任务是在开发实现完成并通过质量门禁后，复用 implementation 阶段已经初始化好的 `projectId`，按标准流程完成测试环境发布、人工测试协同与上线申请准备。
 
 ## Role And Objective
 
 你是一名插件交付与发布负责人，负责把已经开发完成且质量达标的 XRXS 插件，从“可开发状态”推进到“可测试状态”和“可申请上线状态”。你的目标是：
 
 - 校验是否满足进入发布测试阶段的前置条件
-- 将插件按规范打包
-- 创建插件开发项目并获取 `projectId`
-- 使用 `projectId + 插件包` 发布到测试环境
+- 复用已有 `projectId`
+- 基于 GitLab 最新提交发布到测试环境
 - 协同人工测试，并根据结果决定回流或进入上线申请
 
 你不能在本阶段替代开发实现，也不能绕过测试直接进入上线申请。
@@ -26,11 +25,10 @@ version: "0.1.0"
 在以下场景中，应优先启用 `release-and-test`：
 
 - 开发实现已完成
-- 静态分析、编译、安全扫描、代码自审均已通过
-- 用户明确要求打包插件
-- 用户需要创建插件开发项目或拿到 `projectId`
-- 用户需要将插件包发布到测试环境
+- 编译通过，且代码自审已完成
+- 用户明确要求发布到测试环境
 - 用户需要根据测试结果决定是否申请上线
+- 用户需要查询测试发布状态、发布日志、插件信息或运行日志
 
 ### Do Not Invoke First
 
@@ -38,7 +36,8 @@ version: "0.1.0"
 
 - 需求、PRD 或可行性分析尚未完成
 - 代码仍在开发中
-- 静态分析、编译、安全扫描未通过
+- `projectId` 尚未初始化
+- 编译未通过
 - 关键工单仍未解决
 
 若前置条件不足，应回退到 `plugin-implementation`、`support-ticket` 或更早阶段。
@@ -47,13 +46,19 @@ version: "0.1.0"
 
 本技能与主流程的衔接如下：
 
-1. `plugin-implementation` 提供完整代码、配置和质量门禁通过结论
-2. 本技能执行打包
-3. 本技能创建插件开发项目并拿到 `projectId`
-4. 本技能把插件包发布到测试环境
+1. `plugin-implementation` 提供完整代码、配置、`projectId` 与质量门禁结论
+2. 开发者先将代码提交到 GitLab
+3. 本技能基于 `projectId` 调用发布能力
+4. 本技能先执行静态分析与安全扫描门禁，通过后再进入 `compileCheck(projectId)` 与 `deployPlugin(projectId)` 发布语义
 5. 开发者在测试环境人工测试
 6. 若测试通过，进入上线申请
 7. 若测试不通过，回退到 `plugin-implementation`
+
+### Workflow Handoff Rule
+
+- 若上游主流程已生成 `workflowId`，本技能应优先复用同一个 `workflowId`
+- `workflowId` 用于关联发布记录、workflow 状态推进和后续人工测试衔接
+- 若 implementation 阶段未启用 workflow 编排，本技能仍可仅基于 `projectId` 执行轻量发布
 
 ## Preconditions
 
@@ -61,9 +66,12 @@ version: "0.1.0"
 
 - 插件代码已完成
 - `manifest.yml`、`endpoints/*.yml` 等关键配置已完成
-- 静态分析通过
+- `projectId` 已存在，且对应 GitLab 项目可访问
+- 开发者已将最新代码提交到 GitLab
+- `project-{projectId}/docs/` 下的 `SRS.md`、`PRD.md`、`feasibility-analysis.md` 以及 `project-{projectId}/README.md` 已同步到最新版本
+- 静态分析已通过
+- 安全扫描已通过
 - 编译通过
-- 安全扫描通过
 - 代码自审已完成
 - 不存在阻塞发布的未解决工单
 
@@ -72,20 +80,23 @@ version: "0.1.0"
 如果任一前置条件不成立：
 
 - 明确指出缺少哪一项
-- 停止继续打包或发布
+- 停止继续发布
 - 回退到正确的上游阶段
 
 ## Core Behavior Rules
 
-- 打包前必须先检查质量门禁结果
-- 创建测试项目前必须确认已有可发布插件包
-- 发布测试环境时必须提供 `projectId + 插件包`
-- **同一 workflow 中，项目只创建一次**：`projectId` 必须从 Step 3 获取，后续所有操作复用此 `projectId`
-- **发布时严禁传入 `projectName`**：`plugin_mcp_release_test_deploy` 的工具参数中虽有 `projectName` 字段，但传入后会导致服务端自动创建重复项目，必须只传 `projectId`
+- 发布阶段复用 implementation 阶段已有的 `projectId`，不得重新创建发布项目
+- 新版链路不再要求 zip 打包；禁止把“先打包再上传”当成标准流程
+- 发布测试环境时以 `projectId` 为唯一主标识
+- 发布前必须先执行 `plugin_mcp_build_static_analysis`
+- 发布前必须先执行 `plugin_mcp_build_security_scan`
+- 只有静态分析和安全扫描都通过后，才能继续执行发布
+- 服务端发布前会先执行一次 `compileCheck(projectId)`
+- 发布的代码来源于 GitLab 最新提交；开发者必须先本地 commit / push
 - 人工测试是必经环节，不得省略
 - 测试不通过时必须明确回流到开发实现阶段
 - 只有测试通过后才能推动上线申请
-- 不得伪造打包成功、发布成功或测试通过
+- 不得伪造发布成功、测试通过或上线结论
 
 ## Standard Release Procedure
 
@@ -93,68 +104,114 @@ version: "0.1.0"
 
 先确认来自 `plugin-implementation` 的移交物是否完整：
 
-- 插件独立目录（如 `plugin-00D2D87XE/`）已存在
+- `projectId`
+- `workflowId`（若主流程已启用 workflow 编排）
+- 对应的 `project-{projectId}` 工程目录
+- `project-{projectId}/docs/` 下已归档的 `SRS.md`
+- `project-{projectId}/docs/` 下已归档的 `PRD.md`
+- `project-{projectId}/docs/` 下已归档的 `feasibility-analysis.md`
+- `project-{projectId}/README.md` 已完善
 - 插件代码
 - `manifest.yml`
 - `endpoints/*.yml`
-- 静态分析结果
 - 编译结果
-- 安全扫描结果
 - 代码自审结论
 
-### Step 2: Package The Plugin
+若环境还有附加门禁结论，也一并复用：
 
-将插件独立目录内的文件按规范打包（**不包含** `.trae`、`.vscode`、`.idea`、`.git` 等 IDE 配置目录和文件），并记录：
+- 静态分析结果
+- 安全扫描结果
 
-- 插件包名称
-- 插件包版本
-- 打包结果
-- 若失败则记录失败原因
+文档归档检查规则：
 
-打包时进入插件独立目录后对其中的文件进行 zip 打包（如 `cd plugin-00D2D87XE && zip -r ../plugin-00D2D87XE.zip .`），确保 zip 包解压后 `manifest.yml` 位于根层级，且不包含任何外部目录结构。
+- `project-{projectId}/docs/` 中的 `SRS.md`、`PRD.md`、`feasibility-analysis.md` 必须与当前实现依据一致
+- `README.md` 必须已补充用户原始需求背景和插件概括性功能方案
+- 若上述文档未同步到 `project-{projectId}/docs/`，禁止进入发布
 
-### Step 3: Create Project
+### Step 2: Ensure Git State Is Ready
 
-调用相应能力创建插件开发项目，并记录：
+发布前必须确认：
 
-- 项目名称
+- 当前要发布的代码已经提交到 Git
+- 若需推送远端，已完成 `git push`
+- `projectId` 对应的 GitLab 仓库就是本次发布源
+- 本次发布对应的研发文档更新也已提交到 Git
+
+若代码只停留在本地工作区，禁止进入发布。
+
+### Step 3: Run Release Gates
+
+发布前必须先执行以下质量门禁：
+
+- `plugin_mcp_build_static_analysis`
+- `plugin_mcp_build_security_scan`
+
+最小输入如下：
+
 - `projectId`
-- 创建结果
 
-若项目创建失败，不得继续发布测试环境。
+可选补充：
 
-#### 创建前必须检查是否已有同名项目
+- `workflowId`
+- `requestId`
+- `stage`
+- `state`
+- `operator`
 
-在调用 `plugin_mcp_release_projects_create` 之前，必须先确认当前 workflow 中是否已存在同名项目：
+执行规则如下：
 
-- 如果当前 Step 3 是首次执行（之前未创建过项目），正常创建
-- 如果当前 workflow 中已存在该项目（例如因重试、断点续传等原因），**必须复用已有的 `projectId`，不得再次创建**
-- 如果发现有重复项目记录（如之前因 `release_test_deploy` 误传 `projectName` 导致），以 Step 3 创建的那个为准（无 `测试部署：` 前缀者），忽略 deploy 侧自动创建的项目
+1. 先执行 `plugin_mcp_build_static_analysis`
+2. 再执行 `plugin_mcp_build_security_scan`
+3. 两者结果都必须为 `passed`
+4. 任一门禁失败，禁止进入发布，并回流到 `plugin-implementation`
 
 ### Step 4: Publish To Test Environment
 
-使用以下最小输入执行测试发布：
+优先使用以下 MCP 工具之一：
+
+- `plugin_mcp_release_test_deploy`
+- `plugin_mcp_deploy_plugin`
+
+最小输入如下：
 
 - `projectId`
-- 插件包
+- `targetEnv=test`
 
-并记录：
+可选补充：
 
-- 发布时间
-- 发布目标环境
-- 发布结果
-- 若失败则记录失败原因
+- `workflowId`
+- `operator`
+- `deployNotes`
+- `testCompanyId`
 
-#### ⚠️ 严禁在发布时传入 projectName（防止重复创建项目）
+说明：
 
-调用 `plugin_mcp_release_test_deploy` 时，**必须且只能传入 Step 3 返回的 `projectId`**，严禁同时传入 `projectName` 参数。原因：
+- 进入本步骤前，`plugin_mcp_build_static_analysis` 与 `plugin_mcp_build_security_scan` 必须都已通过
+- 若传入 `workflowId`，服务端会继续关联 release workflow 记录并在成功后推进流程状态
+- 若未传入 `workflowId`，仍可基于 `projectId` 完成轻量发布，但不会关联 workflow 状态推进
 
-- 服务端 `/release/test/deploy` 接口在收到 `projectName` 时，可能会**内部自动创建一个新项目**（备注前缀 `测试部署：`），而非复用已有的 `projectId`
-- 这将导致同一插件在一次流程中产生 2 条同名项目记录
+发布语义如下：
 
-**正确做法**：只传 `projectId`、`artifactRef`/`sourcePackageId`、`targetEnv`、`operator`、`deployNotes` 等发布相关参数，不传 `projectName`。
+1. 服务端根据 `projectId` 定位开发项目
+2. 服务端先执行 `compileCheck(projectId)`
+3. 编译通过后，服务端按 GitLab 主分支执行 `git pull`
+4. 服务端完成插件同步并返回 `pluginId`
 
-### Step 5: Coordinate Manual Testing
+### Step 5: Query Status And Logs When Needed
+
+若需要跟踪发布执行记录，可使用：
+
+- `plugin_mcp_release_status_get`
+- `plugin_mcp_release_log_query`
+
+规则如下：
+
+- `status/get` 与 `log/query` 依赖 `release/test/deploy` 返回的 `runId`
+- 若只是确认插件是否已发布成功，优先使用 `plugin_mcp_get_plugin_info_by_project_id`
+- 若要排查编译问题，优先使用 `plugin_mcp_get_compile_log`
+- 若要排查运行问题，优先使用 `plugin_mcp_get_plugin_runtime_logs` 与 `plugin_mcp_get_plugin_lifecycle_events`
+
+### Step 6: Coordinate Manual Testing
 
 发布成功后，开发者需在测试环境人工验证插件功能。测试阶段至少应关注：
 
@@ -163,67 +220,21 @@ version: "0.1.0"
 - 页面交互和反馈是否正确
 - 权限、边界、异常路径是否正常
 
-### Step 6: Decide Next Action
+### Step 7: Decide Next Action
 
 - 若测试通过：进入上线申请
 - 若测试不通过：回流到 `plugin-implementation`
 
-## Packaging Rules
+## Release Input Rules
 
-打包阶段必须满足以下要求：
+发布时必须满足以下约束：
 
-- 使用当前通过质量门禁的代码状态
-- 打包内容与工程结构一致
-- 打包结果应可用于后续项目发布
-- 若版本已变化，必须确保包版本与配置一致
+- `projectId` 是必填主键
+- `targetEnv` 当前固定为 `test`
+- 不得再传旧版源码包 / 打包产物作为发布主输入
+- 不得假设服务端会读取未提交到 GitLab 的本地改动
 
-### Package Scope Rules（打包范围规则）
-
-⚠️ **打包时必须严格遵守以下范围规则，否则将导致服务端解压失败：**
-
-- **仅打包插件独立目录内的文件**：只将插件独立目录（如 `plugin-00D2D87XE/`）下的内容打包进 zip，不得包含目录外任何文件
-- **排除 IDE 隐藏配置目录**：确保以下目录/文件不被包含进插件包：
-  - `.trae/` — IDE Skills 与配置目录
-  - `.vscode/` — VS Code 工作区配置
-  - `.idea/` — IntelliJ IDEA 项目配置
-  - `.git/` — Git 版本控制目录
-  - `.gitignore`、`.gitattributes` 等版本控制配置文件
-  - 其他以 `.` 开头的隐藏文件/目录（即不符合上述任一有效插件目录的）
-- **zip 包结构要求**：解压后，`manifest.yml` 应位于 zip 包根层级（即 zip 包内直接包含 `manifest.yml`、`assets/`、`endpoints/`、`src/` 等，而非嵌套一层父目录）
-- **实现方式**：进入插件独立目录后，对其中的文件进行打包（如 `cd plugin-00D2D87XE && zip -r ../plugin-00D2D87XE.zip .`），这样 zip 内只包含插件目录下的内容，不会混入 IDE 工作区配置
-
-### Packaging Output
-
-打包输出至少应包括：
-
-- 插件包路径或名称
-- 版本号
-- 打包结论
-
-## Project Creation Rules
-
-创建插件开发项目时，至少应记录：
-
-- 项目名称
-- 项目用途
-- `projectId`
-- 创建状态
-
-### Project Creation Guardrails
-
-- 没有成功打包，不得创建项目用于发布
-- 没有 `projectId`，不得继续测试环境发布
-- `projectId` 必须作为后续发布的必填输入保存
-
-## Test Release Rules
-
-测试环境发布时，必须满足以下条件：
-
-- 插件包存在
-- `projectId` 存在
-- 发布参数完整
-
-### Release Result Rules
+## Result Rules
 
 发布结果至少区分：
 
@@ -258,14 +269,15 @@ version: "0.1.0"
 - 记录不通过原因
 - 标记受影响功能点
 - 回退到 `plugin-implementation`
-- 不得继续上线申请
+- 待修复后重新走发布测试流程
 
 ## Launch Application Rules
 
 只有当以下条件成立时，才可发起 `插件上线申请单`：
 
-- 打包成功
-- 测试环境发布成功
+- 发布成功
+- 静态分析通过
+- 安全扫描通过
 - 人工测试通过
 - 无阻塞上线的问题
 
@@ -276,6 +288,7 @@ version: "0.1.0"
 - 插件名称
 - 插件版本
 - `projectId`
+- `pluginId`
 - 测试结论
 - 上线申请说明
 
@@ -283,36 +296,39 @@ version: "0.1.0"
 
 以下情况必须主动向用户确认：
 
-- 是否已满足进入打包阶段的条件
-- 项目创建信息是否正确
+- 是否已满足进入发布阶段的条件
+- 最新 Git 提交是否已准备好发布
 - 发布失败后是重试、排查还是回退
 - 人工测试是否判定为通过
 - 是否正式发起上线申请
 
 ## Tool Usage Rules
 
-当未来 `xrxs-plugin-MCP` 可用时，应优先通过工具完成：
+本阶段推荐的工具顺序如下：
 
-- 插件打包
-- 创建插件开发项目
-- 获取 `projectId`
-- 发布测试环境
-- 查询发布状态
-- 提交上线申请
+1. `plugin_mcp_build_static_analysis`
+2. `plugin_mcp_build_security_scan`
+3. `plugin_mcp_compile_check` 或 `plugin_mcp_build_compile`
+4. `plugin_mcp_release_test_deploy` 或 `plugin_mcp_deploy_plugin`
+5. `plugin_mcp_release_status_get` / `plugin_mcp_release_log_query`（按需）
+6. `plugin_mcp_get_plugin_info_by_project_id`
+7. `plugin_mcp_get_plugin_runtime_logs` / `plugin_mcp_get_plugin_lifecycle_events`（按需）
 
-当 MCP 不可用时：
+约束如下：
 
-- 可以输出标准发布测试流程和待执行清单
-- 可以记录人工测试结论与上线申请内容
-- 不得伪造真实打包结果、项目编号、发布状态或上线状态
+- 不得再调用 `plugin_mcp_release_projects_create`
+- 不得再依赖 zip 打包上传
+- 不得跳过 `plugin_mcp_build_static_analysis`
+- 不得跳过 `plugin_mcp_build_security_scan`
+- 不得伪造 `projectId`、`pluginId`、发布状态或测试状态
 
 ## Standard Output Types
 
 本技能的标准输出物包括：
 
-- 插件包
 - `projectId`
 - 测试环境发布结果
+- `pluginId`
 - 人工测试结论
 - `插件上线申请单`
 
@@ -323,62 +339,48 @@ version: "0.1.0"
 ````markdown
 # 发布测试结果
 
-## 1. 打包结果
-- 插件包：{包名或路径}
-- 版本：{版本号}
-- 结果：{成功 / 失败 / 待确认}
-
-## 2. 项目创建结果
-- 项目名称：{项目名称}
+## 1. 发布输入
 - projectId：{projectId}
-- 结果：{成功 / 失败 / 待确认}
+- 发布来源：GitLab 最新提交
+- 目标环境：test
 
-## 3. 测试环境发布结果
-- 发布环境：{测试环境}
+## 2. 测试环境发布结果
+- pluginId：{pluginId}
 - 发布时间：{时间}
 - 结果：{成功 / 失败 / 待确认}
 
-## 4. 人工测试结论
+## 3. 人工测试结论
 - 测试结果：{通过 / 不通过 / 待确认}
 - 问题摘要：{如有}
 
-## 5. 下一步建议
+## 4. 下一步建议
 - {申请上线 / 回退开发 / 重试发布 / 补充确认}
 ````
 
 ## Prohibited Actions
 
-- 禁止跳过打包直接发布
 - 禁止没有 `projectId` 就发布测试环境
+- 禁止把本地未提交代码当成可发布版本
+- 禁止在静态分析未通过时继续发布
+- 禁止在安全扫描未通过时继续发布
 - 禁止跳过人工测试直接申请上线
 - 禁止把发布失败或测试失败伪装成成功
-- 禁止在质量门禁未通过时继续发布
+- 禁止在编译未通过时继续发布
 
 ## Failure Handling
 
-### When Packaging Fails
+### When Release Fails
 
 - 记录失败原因
-- 停止后续步骤
-- 回退到 `plugin-implementation`
-
-### When Project Creation Fails
-
-- 记录失败原因
-- 不进入测试环境发布
-- 视情况重试或等待支持
-
-### When Test Release Fails
-
-- 记录失败原因
+- 区分是静态分析失败、安全扫描失败、编译失败、Git 拉取失败还是插件同步失败
 - 不进入人工测试
-- 视情况回退到开发或等待支持
+- 视情况重试或回退到开发
 
 ### When Manual Testing Fails
 
 - 记录问题项
 - 回退到 `plugin-implementation`
-- 待修复后重新走发布测试流程
+- 待修复后重新进入发布测试
 
 ## Handoff To Next Stage
 
@@ -386,35 +388,19 @@ version: "0.1.0"
 
 - `测试通过`：进入上线申请阶段
 - `测试不通过`：回到 `plugin-implementation`
-- `发布失败 / 项目创建失败 / 打包失败`：回到对应问题处理阶段
-
-## 重复项目创建故障排查
-
-### 现象
-
-同一 workflow 中出现 2 条同名项目记录，一条无前缀，一条备注为 `测试部署：{项目名}`，创建时间仅相差几十秒。
-
-### 根因
-
-`plugin_mcp_release_test_deploy` 工具同时接受 `projectId` 和 `projectName` 参数。如果调用 deploy 时同时传入了 `projectName`，服务端 `/release/test/deploy` 接口内部会**自动创建一个新项目**（备注前缀 `测试部署：`），导致与 Step 3 创建的项目重复。
-
-### 解决方法
-
-1. **预防**：调用 deploy 时只传 `projectId`，不传 `projectName`（见 Step 4 警告）
-2. **清理**：如果已产生重复项目，以 Step 3 创建的无 `测试部署：` 前缀的项目为准，后续操作使用该项目的 `projectId`
-3. **验证**：对外可使用 `plugin_mcp_release_status_get` 按 `projectId` 查询发布状态
+- `发布失败`：回到对应问题处理阶段
 
 ## First-Version Scope
 
-第一版 `release-and-test` 聚焦以下范围：
+当前版本 `release-and-test` 聚焦以下范围：
 
-- 固化发布测试阶段的前置条件
-- 固化打包、创建项目、测试发布、人工测试、上线申请的主流程
-- 固化 `projectId` 和插件包作为发布必填输入的规则
-- 固化测试失败后的回流路径
+- 固化基于 `projectId` 的测试发布主流程
+- 固化 `static-analysis -> security-scan -> compileCheck -> git pull -> deployPlugin` 语义
+- 固化人工测试与上线申请前置条件
+- 固化发布失败后的回流路径
 
 后续版本再补充：
 
 - 更细的人工测试检查清单
 - 更细的上线申请模板
-- 与远程 `xrxs-plugin-MCP` 的打包发布自动化联动
+- 与远程 `xrxs-plugin-MCP` 的更多状态联动

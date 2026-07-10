@@ -1,4 +1,4 @@
----
+﻿---
 name: "plugin-implementation"
 description: "Implements XRXS plugins from approved PRDs and feasibility results. Use when requirements are confirmed and the workflow is ready to build plugin code and configuration."
 description_zh: "根据已确认的 PRD 和可行性结论实现 XRXS 插件代码。适用于需求与可行性均已明确，准备进入项目初始化、代码开发、配置生成和工程落地的阶段。"
@@ -52,6 +52,13 @@ version: "0.2.0"
 3. 若需要，`support-ticket` 确认阻塞项已解决
 4. 本技能先初始化开发项目，再进入实现阶段
 5. 本技能完成结构校验、编码、编译校验与自审后，交由 `release-and-test`
+
+### Workflow Handoff Rule
+
+- 若主流程已经生成 `workflowId`，本技能必须继续复用该 `workflowId`
+- `plugin_mcp_implementation_project_init` 可携带 `workflowId`，用于把项目初始化与主流程实例关联起来
+- `workflowId` 不负责替代 `projectId`；实现阶段仍以 `projectId` 作为开发项目主标识
+- 若当前仅走轻量实现链路，也可暂不传 `workflowId`，但后续若启用 workflow 编排，应继续沿用同一值
 
 ## Preconditions
 
@@ -112,13 +119,16 @@ version: "0.2.0"
 
 本技能允许引用的主要输入包括：
 
+- 项目根目录下的 `SRS.md`
 - 项目根目录下的 `PRD.md`
+- 项目根目录下的 `feasibility-analysis.md`
 - 可行性分析结论
 - 已解决工单信息
 - `plugin-dev-kit/README.md`
 - `plugin-dev-kit/docs`
 - `plugin-dev-kit/src/plugin-opensdk`
 - `plugin_mcp_implementation_project_init` 返回的项目初始化结果
+- 需要同步到 `project-{projectId}/docs/` 的 `SRS.md`、`PRD.md`、`feasibility-analysis.md`
 
 ### Forbidden Assumptions
 
@@ -148,6 +158,7 @@ version: "0.2.0"
 调用规则：
 
 - `projectName` 必须来自 `PRD.md`
+- 若上游已存在 `workflowId`，应一并传入 `plugin_mcp_implementation_project_init`
 - `projectName` 若重名，服务端会自动追加 6 位随机数后再落库
 - GitLab 项目名固定为 `project-{projectId}`
 - 初始化结果中的 `projectId`、`gitlabProjectUrl`、`gitlabProjectToken` 必须被后续步骤复用
@@ -186,7 +197,9 @@ git pull
 - `project-{projectId}/` 是唯一开发根目录
 - 禁止在工作区根目录直接创建插件文件
 - 禁止在 `project-{projectId}/` 外再包一层 `plugin-*` 目录
-- 若需要复制 `PRD.md`、补充 `README.md` 或新增模板文件，均应在 `project-{projectId}/` 内完成
+- `SRS.md`、`PRD.md`、`feasibility-analysis.md` 等研发文档应同步保存到 `project-{projectId}/docs/`
+- 若源文档发生更新，必须同步覆盖 `project-{projectId}/docs/` 内同名文件，保持 GitLab 项目内归档文档与当前研发依据一致
+- 若需要复制文档、补充 `README.md` 或新增模板文件，均应在 `project-{projectId}/` 内完成
 
 ## Project Structure Rules
 
@@ -198,7 +211,9 @@ git pull
 - `endpoints/`: 存放所有织入点配置
 - `manifest.yml`: 插件主配置
 - `README.md`: 插件文档
-- `PRD.md`: 产品需求文档
+- `docs/SRS.md`: 需求规格说明
+- `docs/PRD.md`: 产品需求文档
+- `docs/feasibility-analysis.md`: 可行性分析结论
 - `src/backend/`: 后端代码
 - `src/fe/`: 前端代码
 
@@ -209,8 +224,46 @@ git pull
 - 配置文件中的 `source` 必须与实际代码路径一致（路径相对于项目根）
 - 插件代码目录应与插件开发类型匹配
 - `manifest.yml` 中的 `source` 字段通常填写 `src`
+- `SRS.md`、`PRD.md`、`feasibility-analysis.md` 若在上游存在，必须同步到项目 `docs/` 目录
 - 缺目录时先补齐，缺模板文件时先生成最小可运行模板
 - 若目录结构与插件开发类型冲突，必须先修正再编码
+
+## Documentation Sync Rules
+
+编码阶段开始后，必须把当前研发依据同步到真实 Git 项目目录，保证代码与文档统一归档在 GitLab。
+
+### Required Documents
+
+- `docs/SRS.md`
+- `docs/PRD.md`
+- `docs/feasibility-analysis.md`
+- 其他对当前插件实现有直接约束作用的研发文档
+
+### Sync Rules
+
+- 若工作区 `docs/` 目录存在上述文档，必须复制到 `project-{projectId}/docs/`
+- 若 `project-{projectId}/docs/` 已存在同名文件，应以当前最新研发文档内容覆盖更新
+- 文档同步应在编码正式开始前完成
+- 当编码过程中上游文档再次变更时，必须同步更新 `project-{projectId}/docs/` 内同名文件，并与代码变更一起提交
+- 禁止仅在工作区 `docs/` 目录保留最新文档而不回写 Git 项目目录
+- 禁止让 GitLab 项目中的文档版本长期落后于当前实现依据
+
+### README Completion Rules
+
+编码阶段开始时，必须完善 `project-{projectId}/README.md`，至少包含以下两部分内容：
+
+- 第一部分：用户原始需求背景
+- 第二部分：基于 `PRD.md`、`SRS.md`、`feasibility-analysis.md` 等文档整理出的插件概括性功能方案
+
+README.md 建议至少覆盖以下信息：
+
+- 用户最原始需求摘要，可引用原始会话、原始诉求、补充说明等内容
+- 插件建设目标与业务背景
+- 本插件要解决的核心问题
+- 关键功能范围与非目标范围
+- 涉及的点位、接口、插件形态与整体实现思路
+- 当前项目内 `SRS.md`、`PRD.md`、`feasibility-analysis.md` 等文档的用途说明
+- 后续维护者阅读顺序建议
 
 ## Manifest Rules
 
@@ -386,7 +439,22 @@ git pull
 
 从这一刻开始，所有编码、配置、文档修改都必须在 `project-{projectId}/` 内完成。
 
-### Step 4: Validate And Repair Structure
+### Step 4: Sync Core Documents And README
+
+在 `project-{projectId}/docs/` 先同步研发文档，并在 `project-{projectId}/README.md` 中完善说明：
+
+- 复制或更新 `SRS.md`
+- 复制或更新 `PRD.md`
+- 复制或更新 `feasibility-analysis.md`
+- 完善 `README.md`
+
+规则如下：
+
+- 若 `project-{projectId}/docs/` 已有同名文档，使用当前最新内容覆盖更新
+- `README.md` 必须补全“用户原始需求背景”和“插件概括性功能方案”两部分
+- 文档同步完成后，才能进入结构校验和正式编码
+
+### Step 5: Validate And Repair Structure
 
 在 `project-{projectId}/` 内检查并修正：
 
@@ -394,13 +462,15 @@ git pull
 - `endpoints/*.yml`
 - `src/backend/*`
 - `src/fe/*`
+- `SRS.md`
 - `PRD.md`
+- `feasibility-analysis.md`
 - `README.md`
 - 必要静态资源与说明文档
 
 先完成结构修正，再开始写业务代码。
 
-### Step 5: Implement Code
+### Step 6: Implement Code
 
 按已确认的文档依据实现具体逻辑，并保持：
 
@@ -409,7 +479,9 @@ git pull
 - 数据读写与 API 使用一致
 - import、方法签名、参数类型与文档或 `src/plugin-opensdk` 完全一致
 
-### Step 6: Compile Check
+若编码过程中 `SRS.md`、`PRD.md`、`feasibility-analysis.md` 有更新，必须先同步 `project-{projectId}/docs/` 内对应文档，再继续编码或提交。
+
+### Step 7: Compile Check
 
 编码完成后，必须先调用编译校验接口：
 
@@ -424,9 +496,9 @@ git pull
 - 编译校验必须按 `projectId` 执行
 - 失败时必须记录错误原因并修复后重试
 - 未通过编译校验不得进入下游阶段
-- 后续若 MCP 封装了 compile-check，优先使用对应 MCP 工具
+- 优先使用 `plugin_mcp_compile_check`，若当前 workflow 需要保留 build 语义，则使用 `plugin_mcp_build_compile`
 
-### Step 7: Self Review And Optional Extra Gates
+### Step 8: Self Review And Optional Extra Gates
 
 编译通过后，必须完成代码自审。
 
@@ -434,7 +506,6 @@ git pull
 
 - 静态分析
 - 安全扫描
-- 打包前检查
 
 但这些附加门禁不能替代 `compileCheck(projectId)`。
 
@@ -489,7 +560,7 @@ git pull
 7. 编写代码与配置
 8. 调用 `compileCheck(projectId)`
 9. 完成代码自审
-10. 如条件允许，再执行附加扫描与打包能力
+10. 如条件允许，再执行附加扫描能力
 
 约束如下：
 
@@ -505,6 +576,8 @@ git pull
 
 - `projectId`
 - 已拉取并修正的 `project-{projectId}` 工程目录
+- 已同步到 `project-{projectId}/docs/` 的 `SRS.md`、`PRD.md`、`feasibility-analysis.md`
+- 已完善的 `README.md`
 - 插件代码
 - `manifest.yml`
 - `endpoints/*.yml`
@@ -518,6 +591,8 @@ git pull
 只有当以下条件全部成立时，才能移交给 `release-and-test`：
 
 - 开发完成
+- 研发文档已同步到 `project-{projectId}/docs/`
+- `README.md` 已补全并与当前实现一致
 - 项目目录结构已校正
 - 编译校验通过
 - 代码自审完成
@@ -566,6 +641,7 @@ git pull
 移交时至少应保证下游已获得：
 
 - `projectId` 与对应 Git 项目上下文
+- 已归档在 `project-{projectId}/docs/` 的研发文档与 `project-{projectId}/README.md`
 - 插件包构建前所需完整代码与配置
 - 编译校验通过结论
 - 可用于发布测试的工程状态
@@ -582,6 +658,6 @@ git pull
 
 后续版本再补充：
 
-- `compileCheck(projectId)` 的 MCP 封装
+- `compileCheck(projectId)` 与 `deployPlugin(projectId)` 的 MCP 协同约定
 - 更细的前后端模板与脚手架规则
 - 与发布测试阶段更细的项目状态联动
