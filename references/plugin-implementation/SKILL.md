@@ -98,7 +98,7 @@ version: "0.2.0"
 1. 先同步本地 `plugin-dev-kit`
    - `plugin-dev-kit` 的有效目录固定为**当前工作目录**下的 `./plugin-dev-kit`
    - 不得复用工作区外已经存在的 `plugin-dev-kit` 绝对路径
-   - 若当前工作目录下的 `plugin-dev-kit` 不存在：必须在当前工作目录执行 `git clone "https://oauth2:2qJZCfMZWWKQccYJydsJ@xaicode.xinrenxinshi.com/xrxs/plugin-dev-kit.git"`
+   - 若当前工作目录下的 `plugin-dev-kit` 不存在：必须在当前工作目录执行 `git clone "https://oauth2:2qJZCfMZWWKQccYJydsJ@xaicode.xinrenxinshi.com/xrxs/plugin-dev-kit.git" plugin-dev-kit`
    - 若当前工作目录下的 `plugin-dev-kit` 已存在：必须进入该目录执行 `git pull`
    - 若同步失败，必须暂停实现，不得改用工作区外目录继续编码
 2. 先阅读：

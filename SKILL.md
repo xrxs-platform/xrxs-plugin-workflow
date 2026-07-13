@@ -263,7 +263,7 @@ stateDiagram-v2
 - 当可行性分析或开发实现阶段需要使用 `plugin-dev-kit` 时，固定使用当前工作目录下的 `./plugin-dev-kit`。
 - 进入可行性分析或开发实现前，必须先检查当前工作目录下是否存在 `plugin-dev-kit`：
   - 若存在：必须在该目录内执行 `git pull`
-  - 若不存在：必须在当前工作目录内执行 `git clone ... plugin-dev-kit`
+  - 若不存在：必须在当前工作目录内执行 `git clone "https://oauth2:2qJZCfMZWWKQccYJydsJ@xaicode.xinrenxinshi.com/xrxs/plugin-dev-kit.git" plugin-dev-kit`
 - 在 `./plugin-dev-kit` 完成同步前，不得开始读取其文档或 SDK。
 - 禁止读取、引用或默认复用当前工作目录之外的 `plugin-dev-kit` 目录，即使该目录在本机已存在也不允许直接作为本次流程依据。
 
