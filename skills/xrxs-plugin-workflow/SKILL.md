@@ -2,7 +2,7 @@
 name: "xrxs-plugin-workflow"
 description: "Guides XRXS plugin workflow across requirement clarification, PRD, feasibility, implementation, packaging, testing, release, and support. Use for end-to-end XRXS plugin work."
 description_zh: "XRXS 插件研发总入口技能，覆盖需求澄清、PRD、可行性分析、开发、质量门禁、基于 GitLab 的测试发布与上线申请。"
-version: "0.1.0"
+version: "0.1.1"
 ---
 
 # XRXS Plugin Workflow

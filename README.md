@@ -32,9 +32,18 @@ npm install @xrxs-plugin/xrxs-plugin-workflow
 
 ### 方式 3：手动导入
 
-1. 将 `SKILL.md` 和 `references/` 目录导入 IDE 技能目录
+1. 将 `skills/xrxs-plugin-workflow/` 整个目录导入 IDE 技能目录
 2. Trae：`Settings -> Rule & Skills -> Skills -> Create`
 3. 其他 IDE 请参考各自文档
+
+## 仓库结构说明
+
+本仓库采用子目录 skill 结构，而不是把主 `SKILL.md` 放在仓库根目录：
+
+- skill 入口：`skills/xrxs-plugin-workflow/SKILL.md`
+- 子技能引用：`skills/xrxs-plugin-workflow/references/...`
+
+这样做的原因是 `npx skills add owner/repo` 在 GitHub 安装链路下，对“仓库根目录 skill”通常只会安装根 `SKILL.md`，不会稳定带上根目录下的 `references/`。改为子目录 skill 后，安装器会把整个 skill 目录一起落盘。
 
 ## 这个技能解决什么问题
 
@@ -232,16 +241,18 @@ XRXS 插件研发主流程如下：
 
 ```text
 xrxs-plugin-workflow/
-├── SKILL.md
 ├── README.md
 ├── package.json
-└── references/
-    ├── requirements-translator/SKILL.md
-    ├── prd-writer/SKILL.md
-    ├── feasibility-analysis/SKILL.md
-    ├── support-ticket/SKILL.md
-    ├── plugin-implementation/SKILL.md
-    └── release-and-test/SKILL.md
+└── skills/
+    └── xrxs-plugin-workflow/
+        ├── SKILL.md
+        └── references/
+            ├── requirements-translator/SKILL.md
+            ├── prd-writer/SKILL.md
+            ├── feasibility-analysis/SKILL.md
+            ├── support-ticket/SKILL.md
+            ├── plugin-implementation/SKILL.md
+            └── release-and-test/SKILL.md
 ```
 
 ## 适合什么时候使用这个技能

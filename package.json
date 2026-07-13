@@ -1,11 +1,10 @@
 {
   "name": "@xrxs-plugin/xrxs-plugin-workflow",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "XRXS 插件研发总入口技能，覆盖需求澄清、PRD、可行性分析、开发、质量门禁、打包、测试发布与上线申请",
   "type": "module",
   "files": [
-    "SKILL.md",
-    "references/**/*",
+    "skills/xrxs-plugin-workflow/**/*",
     "README.md"
   ],
   "keywords": [
