@@ -96,6 +96,9 @@ version: "0.2.1"
 - 人工测试是必经环节，不得省略
 - 测试不通过时必须明确回流到开发实现阶段
 - 只有测试通过后才能推动上线申请
+- 发起上线申请时优先调用 `plugin_mcp_release_launch_apply`
+- 上线审核期间优先调用 `plugin_mcp_release_project_status_get` 查询项目状态
+- 若需要撤回审核，优先调用 `plugin_mcp_release_launch_cancel`
 - 不得伪造发布成功、测试通过或上线结论
 
 ## Standard Release Procedure
@@ -225,6 +228,27 @@ version: "0.2.1"
 - 若测试通过：进入上线申请
 - 若测试不通过：回流到 `plugin-implementation`
 
+### Step 8: Submit Or Cancel Launch Application
+
+当人工测试通过后，按以下顺序处理上线申请：
+
+1. 先调用 `plugin_mcp_release_project_status_get(projectId)` 确认当前 `audit_phase`
+2. 若当前状态为 `1/2/4/9`，调用 `plugin_mcp_release_launch_apply`
+3. 提交后继续使用 `plugin_mcp_release_project_status_get` 跟踪审核状态
+4. 若需要撤回审核，且当前状态为 `3`，调用 `plugin_mcp_release_launch_cancel`
+
+`audit_phase` 取值定义如下：
+
+- `1`：研发阶段
+- `2`：测试阶段
+- `3`：发布审核中
+- `4`：发布审核不通过
+- `5`：已发布
+- `6`：已删除
+- `7`：发布插件代码
+- `8`：发布代码成功
+- `9`：发布代码失败
+
 ## Release Input Rules
 
 发布时必须满足以下约束：
@@ -281,6 +305,13 @@ version: "0.2.1"
 - 人工测试通过
 - 无阻塞上线的问题
 
+推荐调用规则：
+
+- 先调用 `plugin_mcp_release_project_status_get`
+- 若 `audit_phase in (1,2,4,9)`，再调用 `plugin_mcp_release_launch_apply`
+- 若 `audit_phase = 3`，说明已处于审核中，应继续查询状态而不是重复提交
+- 若 `audit_phase = 3` 且业务决定撤回，调用 `plugin_mcp_release_launch_cancel`
+
 ### Launch Application Output
 
 上线申请至少应包含：
@@ -311,8 +342,10 @@ version: "0.2.1"
 3. `plugin_mcp_compile_check` 或 `plugin_mcp_build_compile`
 4. `plugin_mcp_release_test_deploy` 或 `plugin_mcp_deploy_plugin`
 5. `plugin_mcp_release_status_get` / `plugin_mcp_release_log_query`（按需）
-6. `plugin_mcp_get_plugin_info_by_project_id`
-7. `plugin_mcp_get_plugin_runtime_logs` / `plugin_mcp_get_plugin_lifecycle_events`（按需）
+6. `plugin_mcp_release_project_status_get`
+7. `plugin_mcp_release_launch_apply` / `plugin_mcp_release_launch_cancel`
+8. `plugin_mcp_get_plugin_info_by_project_id`
+9. `plugin_mcp_get_plugin_runtime_logs` / `plugin_mcp_get_plugin_lifecycle_events`（按需）
 
 约束如下：
 
@@ -330,6 +363,7 @@ version: "0.2.1"
 - 测试环境发布结果
 - `pluginId`
 - 人工测试结论
+- 项目状态查询结果
 - `插件上线申请单`
 
 ### Suggested Output Template

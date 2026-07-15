@@ -320,6 +320,8 @@ stateDiagram-v2
 - 触发静态分析、编译、安全扫描
 - 基于 `projectId` 发布插件到测试环境
 - 查询发布状态和工单状态
+- 查询项目当前审核状态
+- 提交上线申请与取消上线申请
 
 ### Fallback Principle
 
@@ -358,7 +360,7 @@ stateDiagram-v2
 | `feasibility` | 织入点查询、业务 API 查询、缺失项识别、可行性校验 | Feasibility Analysis Stage | `feasibility_pending`、`feasibility_blocked`、`feasibility_ready` |
 | `support-ticket` | 工单创建、查询、状态更新、关闭 | Support Ticket Stage | `support_ticket_open`、`support_ticket_resolved` |
 | `build` | 静态分析、编译、安全扫描 | Implementation Stage、Quality Stage | `implementation_in_progress`、`quality_failed`、`implementation_ready` |
-| `release` | 基于 `projectId` 发布测试环境、查询发布状态、上线申请 | Release And Test Stage | `release_in_progress`、`release_blocked`、`testing_in_progress`、`launch_ready` |
+| `release` | 基于 `projectId` 发布测试环境、查询项目状态、提交/取消上线申请 | Release And Test Stage | `release_in_progress`、`release_blocked`、`testing_in_progress`、`launch_ready` |
 | `workflow` | 流程状态读写、阶段推进、阻塞标记、恢复标记 | 全阶段 | 全状态 |
 
 ### Capability Invocation Rules
@@ -388,7 +390,7 @@ stateDiagram-v2
 | `feasibility` | `PRD.md`、目标功能点、插件形态候选 | 点位查询结果、API 查询结果、缺失项、可行性结论 | 查询条件、缺失项、阻塞说明 |
 | `support-ticket` | 缺失单、问题类型、项目上下文 | 工单内容、工单状态、恢复建议 | 工单参数、状态未知原因、阻塞影响 |
 | `build` | 代码状态、配置文件、目标构建动作 | 静态分析结果、编译结果、安全扫描结果 | 错误日志、失败位置、相关版本与配置状态 |
-| `release` | `projectId`、目标环境 | 发布结果、发布状态、上线申请结果 | 发布参数、失败原因、环境信息 |
+| `release` | `projectId`、目标环境 | 发布结果、项目状态、上线申请结果 | 发布参数、失败原因、环境信息 |
 | `workflow` | 当前状态、目标动作、上下文标识 | 状态迁移结果、阻塞标记、恢复标记、阶段同步结果 | 原状态、目标状态、迁移失败原因 |
 
 ### State Integration Rules
@@ -419,7 +421,7 @@ MCP 调用结果必须映射到主技能的标准输出物：
 - `feasibility` -> 可行性结论、缺失单
 - `support-ticket` -> 技术支持工单、状态更新、恢复建议
 - `build` -> 静态分析结果、编译结果、安全扫描结果
-- `release` -> `projectId`、测试环境发布结果、上线申请结果
+- `release` -> `projectId`、测试环境发布结果、项目状态、上线申请结果
 - `workflow` -> 状态变更记录、阻塞态、恢复态、终态同步结果
 
 ### Capability Failure Rules
@@ -699,6 +701,7 @@ MCP 调用结果必须映射到主技能的标准输出物：
 - `projectId`
 - 测试环境发布结果
 - 人工测试结论
+- 项目状态查询结果
 - `插件上线申请单` 或明确回流结论
 
 禁止跳过条件：
