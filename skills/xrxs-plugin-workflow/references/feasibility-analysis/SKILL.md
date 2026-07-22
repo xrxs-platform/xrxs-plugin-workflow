@@ -2,7 +2,7 @@
 name: "feasibility-analysis"
 description: "Checks XRXS plugin feasibility from PRD by confirming plugin development type and matching required pointcuts and business APIs against plugin-dev-kit docs. Use when PRD is ready and the workflow must decide whether development can proceed."
 description_zh: "根据 PRD 评估 XRXS 插件可行性，重点先确认插件开发类型，再结合 plugin-dev-kit 文档核查织入点和业务 API。适用于 PRD 已完成、需要判断能否继续开发或是否需要缺失单与技术支持工单的阶段。"
-version: "0.2.0"
+version: "0.3.0"
 ---
 
 # Feasibility Analysis
@@ -62,7 +62,8 @@ version: "0.2.0"
 - 不能用“开发时再看”替代当前阶段的关键判断
 - 对不确定项必须明确标记为 `待确认`
 - 缺失项必须形成结构化清单，不能只写一句“可能缺少”
-- 可行性分析不使用 MCP 查询能力清单，必须基于本地 `plugin-dev-kit` 文档进行静态核对
+- 可行性**能力核对**不使用 MCP 查询能力清单，必须基于本地 `plugin-dev-kit` 文档进行静态核对
+- 但可行性**流程状态推进**必须走 MCP `workflow_*` 系列工具，与主技能状态机保持同步
 - 文档查阅必须遵循 `README.md -> 索引文档 -> 详情文档` 的顺序，禁止一开始直接遍历细节文档
 
 ## Capability Source Baseline
@@ -343,7 +344,9 @@ version: "0.2.0"
 
 ## Tool Usage Rules
 
-本阶段不使用 `xrxs-plugin-MCP` 做可行性分析。
+本阶段的工具使用分两个正交维度：**能力核对**走本地 `plugin-dev-kit`，**流程状态推进**走 MCP `workflow_*` 工具。
+
+### 能力核对（Capability Verification）
 
 必须按以下顺序执行：
 
@@ -355,10 +358,29 @@ version: "0.2.0"
 
 约束如下：
 
-- 不得调用 MCP 查询织入点或业务 API
+- 不得调用 MCP 查询织入点或业务 API（MCP 没有 `feasibility` 分组工具）
 - 不得绕过 `README.md` 和索引文档直接翻查细节目录
 - 不得绕过本地文档直接假设能力存在
 - 若本地文档未覆盖所需能力，应标记为 `待确认` 或 `缺失`
+
+### 流程状态推进（Workflow State Recording）
+
+本阶段是主流程首次进入 MCP 驱动模式的阶段，必须显式记录 workflow 状态：
+
+1. **阶段进入时**：
+   - 若主技能尚未生成 `workflowId`，本子技能负责生成：
+     - 优先调用 `plugin_mcp_util_snowflake_id` 拿到 9 字符短 ID
+     - 拼接为 `wf-{snowflakeId}` 或与主技能约定的格式
+   - 调用 `plugin_mcp_workflow_state_get(workflowId)` 查询当前状态（首次调用返回空即代表尚未持久化）
+   - 调用 `plugin_mcp_workflow_state_update(workflowId, toState="feasibility_pending")` 首次持久化 workflow 记录
+2. **分析完成后**（根据 `Decision Rules` 结论）：
+   - `可行` → `plugin_mcp_workflow_state_update(toState="feasibility_ready")`
+   - `部分可行` 且用户选择先缩减范围继续 → `plugin_mcp_workflow_state_update(toState="feasibility_ready")`，并在 `note` 中记录已缩减范围
+   - `部分可行` 且用户选择等待补齐 → `plugin_mcp_workflow_block(blockedState="feasibility_blocked", reason="...")`，随后进入 `support-ticket`
+   - `不可行` → `plugin_mcp_workflow_block(blockedState="feasibility_blocked", reason="...")`，随后进入 `support-ticket` 或回退 `prd-writer`
+3. **状态更新失败时**：
+   - 不得视为已推进，必须重试或提示用户
+   - 若 MCP 服务不可用，可暂时以本地记录代替，但必须在结论中显式标注 `workflow 状态未同步`，并在下一次会话恢复时补齐
 
 ## Output Contract
 
@@ -382,7 +404,8 @@ version: "0.2.0"
 - 禁止直接写代码
 - 禁止跳过缺失项记录直接宣布可开发
 - 禁止伪造已有点位或 API 能力
-- 禁止使用 MCP 替代本地 `plugin-dev-kit` 文档分析
+- 禁止使用 MCP 替代本地 `plugin-dev-kit` 文档做能力分析
+- 禁止跳过 `plugin_mcp_workflow_state_update` / `plugin_mcp_workflow_block` 直接把结论移交下一阶段
 - 禁止读取、引用或默认复用当前工作目录之外的 `plugin-dev-kit` 目录
 - 禁止用技术实现细节替代可行性结论
 
@@ -408,11 +431,11 @@ version: "0.2.0"
 
 ## Handoff To Next Stage
 
-分析完成后，按以下规则移交：
+分析完成后，按以下规则移交（移交前必须先完成 workflow 状态更新）：
 
-- `可行`：进入 `plugin-implementation`
-- `部分可行`：由用户决定先缩减范围开发，或进入 `support-ticket`
-- `不可行`：进入 `support-ticket` 或回退到 `prd-writer`
+- `可行`：先 `state_update(toState="feasibility_ready")`，再进入 `plugin-implementation`
+- `部分可行`：由用户决定先缩减范围开发（同 `可行`），或 `workflow_block(feasibility_blocked)` 后进入 `support-ticket`
+- `不可行`：`workflow_block(feasibility_blocked)` 后进入 `support-ticket` 或回退到 `prd-writer`
 
 ## First-Version Scope
 

@@ -2,7 +2,7 @@
 name: "plugin-implementation"
 description: "Implements XRXS plugins from approved PRDs and feasibility results. Use when requirements are confirmed and the workflow is ready to build plugin code and configuration."
 description_zh: "根据已确认的 PRD 和可行性结论实现 XRXS 插件代码。适用于需求与可行性均已明确，准备进入项目初始化、代码开发、配置生成和工程落地的阶段。"
-version: "0.2.0"
+version: "0.3.0"
 ---
 
 # Plugin Implementation
@@ -55,10 +55,13 @@ version: "0.2.0"
 
 ### Workflow Handoff Rule
 
-- 若主流程已经生成 `workflowId`，本技能必须继续复用该 `workflowId`
-- `plugin_mcp_implementation_project_init` 可携带 `workflowId`，用于把项目初始化与主流程实例关联起来
+- 本技能必须复用主技能传下的 `workflowId`；若上游未传入但接受到 `feasibility_ready` 移交，应先提醒主技能补发 `workflowId` 后再进入实现
+- `plugin_mcp_implementation_project_init` 必须携带 `workflowId`，用于把项目初始化与主流程实例关联起来
 - `workflowId` 不负责替代 `projectId`；实现阶段仍以 `projectId` 作为开发项目主标识
-- 若当前仅走轻量实现链路，也可暂不传 `workflowId`，但后续若启用 workflow 编排，应继续沿用同一值
+- **阶段进入时**：调用 `plugin_mcp_workflow_state_update(workflowId, toState="implementation_pending")`
+- **项目初始化完成后**：调用 `plugin_mcp_workflow_state_update(toState="implementation_in_progress")`
+- **所有门禁通过后**：调用 `plugin_mcp_workflow_state_update(toState="implementation_ready")`，再移交 `release-and-test`
+- **任一门禁失败时**：调用 `plugin_mcp_workflow_block(blockedState="quality_failed", reason="...")`，修复后再 `plugin_mcp_workflow_resume(toState="implementation_in_progress")` 重新跑门禁
 
 ## Preconditions
 
@@ -483,38 +486,32 @@ README.md 建议至少覆盖以下信息：
 
 ### Step 7: Compile Check
 
-编码完成后，必须先调用编译校验接口：
+编码完成后，必须先过编译校验。本阶段固定使用 `plugin_mcp_build_compile`，它属于 workflow 感知的 build 门禁层：
 
-- `/openhands/service/compileCheck?projectId={projectId}`
+- 调用 `plugin_mcp_build_compile(workflowId, projectId)`，服务端将 workflow 状态与编译结果关联
+- 失败时可用 `plugin_mcp_get_compile_log(traceId)` 拉取日志
+- `plugin_mcp_compile_check` 属于 “无 workflow 上下文” 的兼容入口（系统直连编译服务，不写 workflow）；在主流程已存在 `workflowId` 时禁止使用，仅在非主流程、排查型场景下允许作为兼容入口使用
+- 未通过编译校验不得进入下游阶段；需同时 `plugin_mcp_workflow_block(blockedState="quality_failed", reason="compile-failed")`
 
-必要时继续查看：
-
-- `/openhands/service/getCompileLog?traceId={traceId}`
-
-规则如下：
-
-- 编译校验必须按 `projectId` 执行
-- 失败时必须记录错误原因并修复后重试
-- 未通过编译校验不得进入下游阶段
-- 优先使用 `plugin_mcp_compile_check`，若当前 workflow 需要保留 build 语义，则使用 `plugin_mcp_build_compile`
+失败后修复循环固定为：修复代码 → `workflow_resume(toState="implementation_in_progress")` → 重新 `build_compile` → 通过后推至 `implementation_ready`
 
 ### Step 8: Self Review And Optional Extra Gates
 
 编译通过后，必须完成代码自审。
 
-若当前环境已具备额外门禁能力，可继续执行：
+本阶段推荐同时完成以下两项附加门禁（它们同为 workflow 感知工具，不能互为替代，也不能替代 `build_compile`）：
 
-- 静态分析
-- 安全扫描
+- `plugin_mcp_build_static_analysis(workflowId, projectId)`
+- `plugin_mcp_build_security_scan(workflowId, projectId)`
 
-但这些附加门禁不能替代 `compileCheck(projectId)`。
+任一项失败：调用 `plugin_mcp_workflow_block(blockedState="quality_failed", reason="...")`，修复后 `workflow_resume(toState="implementation_in_progress")` 并重跑对应门禁。
 
 ## Quality Gates
 
 ### Gate 1: Compile Check
 
-- 必须调用 `compileCheck(projectId)`
-- 若失败，必须读取日志并修复
+- 必须调用 `plugin_mcp_build_compile(workflowId, projectId)`
+- 失败时必须读取日志并修复，并 `plugin_mcp_workflow_block(quality_failed)`
 - 只有通过后才视为主门禁通过
 
 ### Gate 2: Self Review
@@ -554,13 +551,29 @@ README.md 建议至少覆盖以下信息：
 1. 同步 `plugin-dev-kit`
 2. 阅读 `README.md`
 3. 阅读索引文档完成路由
-4. 调用 `plugin_mcp_implementation_project_init`
-5. `git clone` 或 `git pull` 目标项目
-6. 校验并修正项目结构
-7. 编写代码与配置
-8. 调用 `compileCheck(projectId)`
-9. 完成代码自审
-10. 如条件允许，再执行附加扫描能力
+4. `plugin_mcp_workflow_state_update(toState="implementation_pending")`
+5. 调用 `plugin_mcp_implementation_project_init(workflowId, projectName, ...)`
+6. `plugin_mcp_workflow_state_update(toState="implementation_in_progress")`
+7. `git clone` 或 `git pull` 目标项目
+8. 校验并修正项目结构
+9. 同步研发文档与 `README.md`
+10. 编写代码与配置
+11. 调用 `plugin_mcp_build_compile(workflowId, projectId)`
+12. 调用 `plugin_mcp_build_static_analysis(workflowId, projectId)`
+13. 调用 `plugin_mcp_build_security_scan(workflowId, projectId)`
+14. 完成代码自审
+15. 全部门禁通过后，`plugin_mcp_workflow_state_update(toState="implementation_ready")`，移交 `release-and-test`
+
+### Tool Selection Matrix
+
+就同类工具的选择，本阶段遵守以下二分法：
+
+| 场景 | 首选工具 | 备选工具（仅兼容场景） |
+| --- | --- | --- |
+| workflow 驱动下的编译校验 | `plugin_mcp_build_compile` | 不得使用 `plugin_mcp_compile_check` |
+| 无 workflow 上下文的排查 / 单步兼容 | — | `plugin_mcp_compile_check` |
+| 编译日志拉取 | `plugin_mcp_get_compile_log` | — |
+| 项目初始化 | `plugin_mcp_implementation_project_init` | 不得使用 `plugin_mcp_initialize` 代替 |
 
 约束如下：
 
@@ -569,6 +582,7 @@ README.md 建议至少覆盖以下信息：
 - 不得绕过 `plugin-dev-kit` 文档和 SDK 自行猜测实现
 - 不得读取、引用或默认复用当前工作目录之外的 `plugin-dev-kit` 目录
 - 不得伪造编译通过、扫描通过或系统返回结果
+- 不得在未推至 `implementation_ready` 前直接移交 `release-and-test`
 
 ## Output Contract
 

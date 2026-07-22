@@ -2,7 +2,7 @@
 name: "support-ticket"
 description: "Creates and tracks XRXS plugin support tickets for missing pointcuts, business APIs, or blocked workflow items. Use when feasibility finds gaps or support is needed before development."
 description_zh: "创建并跟踪 XRXS 插件技术支持工单，处理缺失织入点、缺失业务 API 和流程阻塞项。适用于可行性分析发现缺口、开发需等待技术支持的场景。"
-version: "0.1.0"
+version: "0.2.0"
 ---
 
 # Support Ticket
@@ -179,7 +179,7 @@ version: "0.1.0"
 
 ## Workflow Recovery Rules
 
-当工单状态变为 `已解决` 后，必须显式判断主流程恢复位置：
+当工单状态变为 `已解决` 后，必须显式判断主流程恢复位置。本阶段固定的闭环为：`support_ticket_open` → `plugin_mcp_support_ticket_recovery_check` → `plugin_mcp_workflow_resume` → `feasibility-analysis` 复核 → `plugin-implementation`。
 
 - 如果问题来自可行性分析阶段，则恢复到 `feasibility-analysis` 复核
 - 如果复核通过，再进入 `plugin-implementation`
@@ -206,18 +206,45 @@ version: "0.1.0"
 
 ## Tool Usage Rules
 
-当未来 `xrxs-plugin-MCP` 可用时，应优先通过工具完成：
+本阶段是 **MCP 强依赖阶段**，实际工单创建 / 查询 / 更新 / 关闭 / 恢复都必须走 `xrxs-plugin-MCP` 下的 `support_ticket_*` 系列工具，并与 `workflow_*` 系列保持同步。
 
-- 创建技术支持工单
-- 查询工单状态
-- 更新工单状态
-- 关闭工单
+### MCP Tool Orchestration Playbook
 
-当 MCP 不可用时：
+标准调用顺序如下（以维持主技能 `workflowId` 为前提）：
+
+1. **进入阻塞** （从 `feasibility-analysis` 传入缺失项）
+   - `plugin_mcp_workflow_block(workflowId, blockedState="feasibility_blocked" 或其它对应阶段阻塞态, reason="...")`
+   - 若上游子技能已完成 `workflow_block`，本子技能不重复调用，仅需确认
+2. **创建工单**
+   - `plugin_mcp_support_ticket_create(workflowId, ticketType, title, description, priority, missingItems, ...)`
+   - `ticketType` 必须属于：`pointcut-support` / `business-api-support` / `mixed-support` / `workflow-blocker`
+   - 创建成功后获得 `ticketId`，与 `workflowId` 一同入库，后续所有操作必须带上 `ticketId`
+3. **跟踪与更新**
+   - 优先 `plugin_mcp_support_ticket_query(ticketId)` 拉取最新状态，不得自行推断
+   - 若需补充信息或变更优先级，使用 `plugin_mcp_support_ticket_update(ticketId, ...)`
+   - 若存在多张工单，必须逐一拉取并集中展示，不得仅展示一张就宣布已解除阻塞
+4. **判定可否恢复**
+   - 每张已 `resolved` 的工单，都必须调用 `plugin_mcp_support_ticket_recovery_check(ticketId)`（服务端按 `ticketId` 单张判定，检查该工单下缺失项是否全部补齐）
+   - 若同一 `workflowId` 下存在多张工单，必须逐张调用 `recovery_check`，全部返回 `recoverable=true` 才能推进
+   - 只有当所有相关工单的 `recovery_check` 都通过时，才能进入下一步
+   - 若任一工单未解决或 `recovery_check` 返回不可恢复，必须保持阻塞，禁止手工视为可恢复
+5. **关闭工单**
+   - 对于已解决的工单，调用 `plugin_mcp_support_ticket_close(ticketId, resolution="...")`
+   - 关闭需写明 resolution（能力已补齐 / 提供替代方案 / 需求缩减范围 / 已驳回）
+6. **恢复主流程**
+   - `plugin_mcp_workflow_resume(workflowId, toState="feasibility_pending")` → 返回 `feasibility-analysis` 复核
+   - 复核通过后由子技能 `feasibility-analysis` 负责推至 `feasibility_ready`，本子技能不得直接推到 `implementation_pending`
+7. **归档与回溯**
+   - 需要回溯工单历史时，使用 `plugin_mcp_workflow_history_query(workflowId)` 获取时间线
+
+### MCP Fallback Rules
+
+当 MCP 服务不可用时：
 
 - 可以输出标准工单内容供人工提交
 - 可以输出状态跟踪表和恢复建议
 - 不得伪造真实工单编号、处理进度或解决结果
+- 必须在输出中显式标注 `workflow 状态未同步`，并在 MCP 恢复后依次补齐 `workflow_block` / `support_ticket_create` / `workflow_resume` 链路
 
 ## Standard Output Types
 
@@ -247,6 +274,8 @@ version: "0.1.0"
 - 禁止把未解决的问题视为已恢复
 - 禁止在没有依据时伪造工单状态
 - 禁止替代 `plugin-implementation` 直接进入开发
+- 禁止在不调用 `plugin_mcp_support_ticket_recovery_check` 的情况下直接调用 `plugin_mcp_workflow_resume`
+- 禁止在多张工单下仅关闭一张就推进主流程
 
 ## Failure Handling
 
@@ -273,11 +302,11 @@ version: "0.1.0"
 
 ## Handoff To Next Stage
 
-工单协同完成后，按以下规则移交：
+工单协同完成后，按以下规则移交（每一项移交均以 MCP 返回为准）：
 
-- `已解决`：回到 `feasibility-analysis` 复核，之后进入 `plugin-implementation`
-- `处理中 / 待确认`：保持阻塞状态，不进入开发
-- `已驳回`：回退到 `prd-writer` 或由用户决定是否缩减范围
+- `已解决` 且 `recovery_check` 返回可恢复：调用 `plugin_mcp_workflow_resume(toState="feasibility_pending")`，回到 `feasibility-analysis` 复核，之后由可行性分析子技能推至 `feasibility_ready`，再进入 `plugin-implementation`
+- `处理中 / 待确认`：保持 `support_ticket_open` 阻塞状态，不进入开发
+- `已驳回`：`plugin_mcp_support_ticket_close(resolution="rejected")`，回退到 `prd-writer` 或由用户决定是否缩减范围（若缩减范围后可行，同样需先 `workflow_resume` 回 `feasibility-analysis`）
 
 ## First-Version Scope
 

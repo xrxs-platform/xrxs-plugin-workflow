@@ -2,7 +2,7 @@
 name: "release-and-test"
 description: "Publishes XRXS plugins from GitLab projects to the test environment, coordinates manual testing, and prepares launch applications. Use after implementation passes quality gates."
 description_zh: "负责基于 GitLab 开发项目将 XRXS 插件发布到测试环境、协同人工测试并准备上线申请。适用于开发已完成并通过质量门禁，准备进入发布测试阶段的场景。"
-version: "0.2.1"
+version: "0.3.0"
 ---
 
 # Release And Test
@@ -56,9 +56,14 @@ version: "0.2.1"
 
 ### Workflow Handoff Rule
 
-- 若上游主流程已生成 `workflowId`，本技能应优先复用同一个 `workflowId`
-- `workflowId` 用于关联发布记录、workflow 状态推进和后续人工测试衔接
-- 若 implementation 阶段未启用 workflow 编排，本技能仍可仅基于 `projectId` 执行轻量发布
+- 本技能必须复用上游 `plugin-implementation` 传入的 `workflowId`；若上游已推至 `implementation_ready` 却未传入 `workflowId`，必须先提醒主技能补发后再开始发布
+- `workflowId` 用于关联发布记录、workflow 状态推进和后续人工测试衍接
+- **阶段进入时**：`plugin_mcp_workflow_state_update(workflowId, toState="release_in_progress")`
+- **测试环境发布成功后**：`plugin_mcp_workflow_state_update(toState="testing_in_progress")`
+- **人工测试通过后**：`plugin_mcp_workflow_state_update(toState="launch_ready")`
+- **上线申请提交并已发布**（`audit_phase=5`）：`plugin_mcp_workflow_state_update(toState="workflow_completed")`
+- **发布失败**：`plugin_mcp_workflow_block(blockedState="release_blocked", reason="...")`，修复后 `plugin_mcp_workflow_resume(toState="release_in_progress")` 重新发布
+- **人工测试失败**：`plugin_mcp_workflow_block(blockedState="testing_failed", reason="...")`，后退 `plugin-implementation` 修复，修复完成后由 implementation 子技能推至 `implementation_ready` 再重入本阶段
 
 ## Preconditions
 
@@ -170,10 +175,10 @@ version: "0.2.1"
 
 ### Step 4: Publish To Test Environment
 
-优先使用以下 MCP 工具之一：
+本阶段固定使用 `plugin_mcp_release_test_deploy`，它属于 workflow 感知的发布链路：
 
-- `plugin_mcp_release_test_deploy`
-- `plugin_mcp_deploy_plugin`
+- 调用 `plugin_mcp_release_test_deploy(workflowId, projectId, targetEnv="test", ...)`
+- `plugin_mcp_deploy_plugin` 为无 workflow 上下文的兼容入口，在主流程已存在 `workflowId` 时禁止使用，仅在非主流程、单次快速发布、排查型场景下允许使用
 
 最小输入如下：
 
@@ -182,7 +187,7 @@ version: "0.2.1"
 
 可选补充：
 
-- `workflowId`
+- `workflowId`（主流程下必传）
 - `operator`
 - `deployNotes`
 - `testCompanyId`
@@ -190,13 +195,14 @@ version: "0.2.1"
 说明：
 
 - 进入本步骤前，`plugin_mcp_build_static_analysis` 与 `plugin_mcp_build_security_scan` 必须都已通过
-- 若传入 `workflowId`，服务端会继续关联 release workflow 记录并在成功后推进流程状态
-- 若未传入 `workflowId`，仍可基于 `projectId` 完成轻量发布，但不会关联 workflow 状态推进
+- 传入 `workflowId` 后，服务端会关联 release workflow 记录并在成功后推进流程状态
+- 未传 `workflowId` 仅适用于兼容场景，不会关联 workflow 状态推进
+- 发布失败时必须 `plugin_mcp_workflow_block(blockedState="release_blocked", reason="...")`
 
 发布语义如下：
 
 1. 服务端根据 `projectId` 定位开发项目
-2. 服务端先执行 `compileCheck(projectId)`
+2. 服务端先执行一次 `compileCheck(projectId)`（本技能不需重复手工调用）
 3. 编译通过后，服务端按 GitLab 主分支执行 `git pull`
 4. 服务端完成插件同步并返回 `pluginId`
 
@@ -337,23 +343,39 @@ version: "0.2.1"
 
 本阶段推荐的工具顺序如下：
 
-1. `plugin_mcp_build_static_analysis`
-2. `plugin_mcp_build_security_scan`
-3. `plugin_mcp_compile_check` 或 `plugin_mcp_build_compile`
-4. `plugin_mcp_release_test_deploy` 或 `plugin_mcp_deploy_plugin`
+1. `plugin_mcp_workflow_state_update(toState="release_in_progress")`
+2. `plugin_mcp_build_static_analysis(workflowId, projectId)`
+3. `plugin_mcp_build_security_scan(workflowId, projectId)`
+4. `plugin_mcp_release_test_deploy(workflowId, projectId, targetEnv="test")`
 5. `plugin_mcp_release_status_get` / `plugin_mcp_release_log_query`（按需）
-6. `plugin_mcp_release_project_status_get`
-7. `plugin_mcp_release_launch_apply` / `plugin_mcp_release_launch_cancel`
-8. `plugin_mcp_get_plugin_info_by_project_id`
-9. `plugin_mcp_get_plugin_runtime_logs` / `plugin_mcp_get_plugin_lifecycle_events`（按需）
+6. `plugin_mcp_workflow_state_update(toState="testing_in_progress")`，开展人工测试
+7. 测试通过后：`plugin_mcp_workflow_state_update(toState="launch_ready")`
+8. `plugin_mcp_release_project_status_get(projectId)`
+9. `plugin_mcp_release_launch_apply` / `plugin_mcp_release_launch_cancel`
+10. `plugin_mcp_get_plugin_info_by_project_id`
+11. `plugin_mcp_get_plugin_runtime_logs` / `plugin_mcp_get_plugin_lifecycle_events`（按需）
+12. 上线完成（`audit_phase=5`）：`plugin_mcp_workflow_state_update(toState="workflow_completed")`
+
+### Tool Selection Matrix
+
+就同类工具的选择，本阶段遵守以下二分法：
+
+| 场景 | 首选工具 | 备选工具（仅兼容场景） |
+| --- | --- | --- |
+| workflow 驱动下的测试环境发布 | `plugin_mcp_release_test_deploy` | 不得使用 `plugin_mcp_deploy_plugin` |
+| 无 workflow 上下文的单次快速发布 / 兼容场景 | — | `plugin_mcp_deploy_plugin` |
+| 发布运行时状态与日志 | `plugin_mcp_release_status_get` / `plugin_mcp_release_log_query` | — |
+| 上线申请项目审核状态 | `plugin_mcp_release_project_status_get` | — |
+| 上线申请提交 / 撤回 | `plugin_mcp_release_launch_apply` / `plugin_mcp_release_launch_cancel` | — |
 
 约束如下：
 
-- 不得再调用 `plugin_mcp_release_projects_create`
 - 不得再依赖 zip 打包上传
 - 不得跳过 `plugin_mcp_build_static_analysis`
 - 不得跳过 `plugin_mcp_build_security_scan`
 - 不得伪造 `projectId`、`pluginId`、发布状态或测试状态
+- 不得在人工测试未通过时直接提交 `plugin_mcp_release_launch_apply`
+- 不得仅依靠 `plugin_mcp_release_status_get` 就宣布发布成功；发布成功需基于 `plugin_mcp_get_plugin_info_by_project_id` 确认 `pluginId` 已存在
 
 ## Standard Output Types
 

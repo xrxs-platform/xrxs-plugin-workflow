@@ -2,7 +2,7 @@
 name: "xrxs-plugin-workflow"
 description: "Guides XRXS plugin workflow across requirement clarification, PRD, feasibility, implementation, packaging, testing, release, and support. Use for end-to-end XRXS plugin work."
 description_zh: "XRXS 插件研发总入口技能，覆盖需求澄清、PRD、可行性分析、开发、质量门禁、基于 GitLab 的测试发布与上线申请。"
-version: "0.1.1"
+version: "0.2.0"
 ---
 
 # XRXS Plugin Workflow
@@ -85,12 +85,14 @@ XRXS 插件研发必须遵循以下主流程，不得跳过关键门禁：
 
 ### Workflow ID Rule
 
-- 进入 XRXS 插件主流程时，应立即生成一个全局唯一的 `workflowId`
 - `workflowId` 代表一整条插件研发流程实例，不等同于 `projectId`
-- 建议格式：`wf_` + 语义化前缀 + 短随机串，例如 `wf_att_leave_guard_a1b2c3`
-- 同一个插件需求从可行性分析、工单协同、开发实现、发布测试到上线申请，均应复用同一个 `workflowId`
-- 若当前仅执行轻量链路，也可暂时不传 `workflowId`；但一旦启用 workflow 能力，后续阶段必须持续复用，不得中途更换
-- `projectId` 在 implementation 项目初始化时生成；`workflowId` 在主流程启动时生成，二者职责不同
+- 生成方式：由主技能在**首次进入可行性分析阶段**时本地生成，不需要额外的“创建工作流”MCP 调用
+  - 推荐格式：`wf_` + 语义化前缀 + 短随机串，例如 `wf_att_leave_guard_00D2D87XE`
+  - 短随机串建议直接调用 `plugin_mcp_util_snowflake_id` 获取 9 字符 ID 作为后缀
+- 服务端首次持久化时机：在第一次调用 `plugin_mcp_workflow_state_update` 时，服务端会自动按 `workflowId` 创建 workflow 记录并写入首个状态
+- 同一个插件需求从可行性分析、工单协同、开发实现、发布测试到上线申请，均必须复用同一个 `workflowId`
+- Requirements Stage 与 PRD Stage 由当前 LLM 直接产出文档，可以暂不生成 `workflowId`；一旦进入 Feasibility Analysis Stage，必须生成并从此持续复用，不得中途更换
+- `projectId` 在 implementation 项目初始化时由 `plugin_mcp_implementation_project_init` 返回；`workflowId` 与 `projectId` 职责不同，两者都应写入后续所有 MCP 调用参数
 
 ### GitLab Archive Rule
 
@@ -125,6 +127,7 @@ XRXS 插件研发必须遵循以下主流程，不得跳过关键门禁：
 - `feasibility_ready`: 可行性通过，可进入开发
 - `support_ticket_open`: 技术支持工单已创建但未解决
 - `support_ticket_resolved`: 技术支持工单已解决，待复核恢复
+- `implementation_pending`: 开发阶段已进入，尚未完成项目初始化或尚未开始编码
 - `implementation_in_progress`: 开发进行中
 - `quality_failed`: 静态分析、编译、安全扫描或自审未通过
 - `implementation_ready`: 开发与质量门禁通过，可进入发布测试
@@ -308,20 +311,20 @@ stateDiagram-v2
 
 ## Tooling Prerequisite
 
-未来 `xrxs-plugin-MCP` 上线后，本技能应优先通过 MCP 驱动运行期关键动作。需求与 PRD 阶段仍由当前 LLM 直接完成，第一版先定义工具抽象，不绑定具体命令名。
+`xrxs-plugin-MCP` 已作为本技能的默认运行时依赖完成交付（本地以 `@xrxs-plugin/plugin-mcp` 名义预设）。需求与 PRD 阶段仍由当前 LLM 直接完成；从可行性分析阶段开始，主技能优先通过 MCP 驱动运行期关键动作。
 
 ### Tool-First Principle
 
-当 `xrxs-plugin-MCP` 可用时，以下能力优先通过 MCP 调用完成：
+当 `xrxs-plugin-MCP` 可用时，以下能力必须优先通过 MCP 完成：
 
-- 查询织入点列表和可用性
-- 查询业务 API 列表和可用性
-- 创建或查询技术支持工单
-- 触发静态分析、编译、安全扫描
-- 基于 `projectId` 发布插件到测试环境
-- 查询发布状态和工单状态
-- 查询项目当前审核状态
-- 提交上线申请与取消上线申请
+- 创建、查询、更新、关闭技术支持工单（`plugin_mcp_support_ticket_*`）
+- 初始化 GitLab 开发项目（`plugin_mcp_implementation_project_init`）
+- 静态分析、编译、安全扫描（`plugin_mcp_build_*`）
+- 基于 `projectId` 发布插件到测试环境（`plugin_mcp_release_test_deploy` / `plugin_mcp_deploy_plugin`）
+- 查询发布状态、发布日志、插件实例信息（`plugin_mcp_release_status_get` / `plugin_mcp_release_log_query` / `plugin_mcp_get_plugin_info_by_project_id`）
+- 查询项目当前审核状态（`plugin_mcp_release_project_status_get`）
+- 提交与取消上线申请（`plugin_mcp_release_launch_apply` / `plugin_mcp_release_launch_cancel`）
+- 流程状态读写、阻塞与恢复（`plugin_mcp_workflow_*`）
 
 ### Fallback Principle
 
@@ -337,16 +340,6 @@ stateDiagram-v2
 - Requirements Stage 与 PRD Stage 不依赖 MCP 能力
 - 只有从可行性分析阶段开始，才优先进入 MCP 驱动模式
 
-### MCP Readiness Contract
-
-未来正式接入 MCP 后，主技能需要补充以下稳定工具分组：
-
-- `feasibility`: 织入点、业务 API、缺失项校验
-- `support-ticket`: 工单创建、查询、关闭
-- `build`: 静态分析、编译、安全扫描
-- `release`: 基于 `projectId` 的测试环境发布、发布状态查询
-- `workflow`: 流程推进、节点回退、阶段状态同步
-
 ## MCP Capability Contract
 
 `xrxs-plugin-MCP` 是未来驱动 XRXS 插件研发流程自动化的远程能力层。主技能必须把 MCP 视为“可调用的系统能力契约”，而不是零散工具集合。所有 MCP 能力都应与阶段、状态、门禁、输出物和恢复策略显式绑定。
@@ -355,13 +348,17 @@ stateDiagram-v2
 
 主技能应优先按以下能力分组理解和调用 MCP：
 
-| 能力分组 | 主要职责 | 典型对应阶段 | 典型对应状态 |
-|----------|----------|--------------|--------------|
-| `feasibility` | 织入点查询、业务 API 查询、缺失项识别、可行性校验 | Feasibility Analysis Stage | `feasibility_pending`、`feasibility_blocked`、`feasibility_ready` |
-| `support-ticket` | 工单创建、查询、状态更新、关闭 | Support Ticket Stage | `support_ticket_open`、`support_ticket_resolved` |
-| `build` | 静态分析、编译、安全扫描 | Implementation Stage、Quality Stage | `implementation_in_progress`、`quality_failed`、`implementation_ready` |
-| `release` | 基于 `projectId` 发布测试环境、查询项目状态、提交/取消上线申请 | Release And Test Stage | `release_in_progress`、`release_blocked`、`testing_in_progress`、`launch_ready` |
-| `workflow` | 流程状态读写、阶段推进、阻塞标记、恢复标记 | 全阶段 | 全状态 |
+| 能力分组 | 典型工具 | 主要职责 | 典型对应阶段 | 典型对应状态 |
+|----------|----------|----------|--------------|--------------|
+| `workflow` | `plugin_mcp_workflow_state_get` / `plugin_mcp_workflow_state_update` / `plugin_mcp_workflow_block` / `plugin_mcp_workflow_resume` / `plugin_mcp_workflow_history_query` | 流程状态读写、阶段推进、阻塞标记、恢复标记 | 从 Feasibility Analysis 开始的全阶段 | 全状态 |
+| `implementation-init` | `plugin_mcp_implementation_project_init` | 初始化 GitLab 开发项目、申请 project token、返回 `projectId` 与仓库信息 | Implementation Stage | `feasibility_ready` → `implementation_pending` |
+| `support-ticket` | `plugin_mcp_support_ticket_create` / `query` / `update` / `close` / `recovery_check` | 工单创建、查询、状态更新、关闭、恢复检查 | Support Ticket Stage | `support_ticket_open`、`support_ticket_resolved` |
+| `build` | `plugin_mcp_build_static_analysis` / `plugin_mcp_build_compile` / `plugin_mcp_build_security_scan`；需要无 workflow 上下文的原始编译可用 `plugin_mcp_compile_check` + `plugin_mcp_get_compile_log` | 静态分析、编译、安全扫描，同时向 workflow 写回门禁结果 | Implementation Stage、Quality Stage | `implementation_in_progress`、`quality_failed`、`implementation_ready` |
+| `release` | 发布: `plugin_mcp_release_test_deploy`（workflow 感知）/ `plugin_mcp_deploy_plugin`（无 workflow 时的原始发布）；状态与日志: `plugin_mcp_release_status_get` / `plugin_mcp_release_log_query`；上线: `plugin_mcp_release_project_status_get` / `plugin_mcp_release_launch_apply` / `plugin_mcp_release_launch_cancel` | 基于 `projectId` 发布测试环境、查询项目审核状态、提交/取消上线申请 | Release And Test Stage | `release_in_progress`、`release_blocked`、`testing_in_progress`、`launch_ready` |
+| `runtime-info` | `plugin_mcp_get_plugin_info_by_project_id` / `plugin_mcp_get_plugin_configs` / `plugin_mcp_add_plugin_config` / `plugin_mcp_delete_plugin_config` / `plugin_mcp_get_plugin_runtime_logs` / `plugin_mcp_get_plugin_lifecycle_events` | 发布成功后查询插件实例、配置、运行日志与生命周期事件 | Release And Test Stage 之后的排查与运维 | 发布后的任何状态 |
+| `util` | `plugin_mcp_util_snowflake_id`、`plugin_mcp_get_project_id_by_project_path`、`plugin_mcp_health`、`plugin_mcp_initialize` | 本地短 ID、反查 projectId、服务探活与能力探测 | 全阶段辅助 | 不直接维护状态 |
+
+说明：可行性分析（Feasibility Analysis）**不存在专属 MCP 能力分组**。该阶段的能力校对必须基于本地 `plugin-dev-kit` 文档静态核对，仅使用 `workflow` 分组将分析结论回写到流程状态。
 
 ### Capability Invocation Rules
 
@@ -374,12 +371,12 @@ stateDiagram-v2
 
 | 阶段 | 优先 MCP 分组 | 允许调用目的 | 不应越权调用的分组 |
 |------|---------------|--------------|--------------------|
-| Requirements Stage | 无 | 由当前 LLM 生成结构化需求输入与 `SRS.md` | `feasibility`、`build`、`release` |
-| PRD Stage | 无 | 由当前 LLM 生成或更新 `PRD.md` | `feasibility`、`build`、`release` |
-| Feasibility Analysis Stage | `feasibility`、`workflow` | 查询织入点、查询业务 API、形成缺失项、同步可行性状态 | `build`、`release` |
-| Support Ticket Stage | `support-ticket`、`workflow` | 创建工单、查询工单、更新工单状态、恢复状态同步 | `build` |
-| Implementation Stage | `build`、`workflow` | 静态分析、编译、安全扫描、质量状态更新 | `release`，除非已进入 `implementation_ready` |
-| Release And Test Stage | `release`、`workflow` | 基于 `projectId` 发布测试环境、发布状态更新、上线申请 | 无，除非发生回流 |
+| Requirements Stage | 无 | 由当前 LLM 生成结构化需求输入与 `SRS.md` | `implementation-init`、`build`、`release`、`workflow`（尚未生成 workflowId）|
+| PRD Stage | 无 | 由当前 LLM 生成或更新 `PRD.md` | `implementation-init`、`build`、`release`、`workflow`（尚未生成 workflowId）|
+| Feasibility Analysis Stage | `workflow`（+ `util` 生成 workflowId）| 基于本地 `plugin-dev-kit` 静态核对能力；将分析结论同步到流程状态（`feasibility_pending` / `feasibility_blocked` / `feasibility_ready`）| `implementation-init`、`build`、`release` |
+| Support Ticket Stage | `support-ticket`、`workflow` | 创建工单、同步阻塞态、查询/更新/关闭工单、通过 `recovery_check` + `workflow_resume` 恢复主线 | `build`、`release` |
+| Implementation Stage | `implementation-init`、`build`、`workflow` | 初始化开发项目、静态分析、编译、安全扫描、质量状态更新 | `release`，除非已进入 `implementation_ready` |
+| Release And Test Stage | `release`、`runtime-info`、`workflow` | 基于 `projectId` 发布测试环境、查询发布状态与日志、运行时排查、上线申请 | 无，除非发生回流 |
 
 ### Input And Output Contract
 
@@ -397,20 +394,22 @@ stateDiagram-v2
 
 MCP 调用结果必须和 `Workflow State Model` 一一对应：
 
-- `feasibility` 调用成功后，可推动 `prd_ready -> feasibility_pending -> feasibility_ready / feasibility_blocked`
-- `support-ticket` 调用成功后，可推动 `feasibility_blocked -> support_ticket_open -> support_ticket_resolved`
-- `build` 调用成功后，可推动 `implementation_in_progress -> implementation_ready`，失败则进入 `quality_failed`
-- `release` 调用成功后，可推动 `implementation_ready -> release_in_progress -> testing_in_progress -> launch_ready`
-- `workflow` 调用负责显式记录这些迁移，避免状态只停留在文字描述层
+- 本地基于 `plugin-dev-kit` 完成可行性分析后，必须调用 `plugin_mcp_workflow_state_update` 将状态推动为 `feasibility_ready`（可行）或调用 `plugin_mcp_workflow_block` 将状态标记为 `feasibility_blocked`（不可行/部分可行）
+- `plugin_mcp_support_ticket_create` 成功后，服务端会自动把项目阶段推到 10=可行性阻塞，推动 `feasibility_blocked -> support_ticket_open`
+- `plugin_mcp_support_ticket_update(status=resolved)` 后，先调 `plugin_mcp_support_ticket_recovery_check`，通过后再调 `plugin_mcp_workflow_resume` 将状态恢复为 `feasibility_ready`
+- `plugin_mcp_build_static_analysis` / `plugin_mcp_build_compile` / `plugin_mcp_build_security_scan` 任一失败 → 服务端写入 `quality_failed`；均通过 → 推到 `implementation_ready`
+- `plugin_mcp_release_test_deploy` 成功 → `release_in_progress -> testing_in_progress`；失败 → `release_blocked`
+- `plugin_mcp_release_launch_apply` 成功 → `launch_ready -> workflow_completed`（待审核通过后）
+- 任一状态迁移都应追加调用 `plugin_mcp_workflow_state_update`，以避免状态只停留在文字描述层
 
 ### Gate Integration Rules
 
 MCP 调用结果必须参与门禁决策，而不能脱离门禁单独使用：
 
 - 当前 LLM 生成的 `SRS.md` 与 `PRD.md` 参与 `文档门禁`
-- `feasibility` 与 `support-ticket` 的结果参与 `可行性门禁`
+- 本地基于 `plugin-dev-kit` 的可行性分析结论 + `support-ticket` 的状态参与 `可行性门禁`
 - `build` 的结果参与 `工程门禁`
-- `release` 的结果参与 `发布门禁`
+- `release` 的结果（含 `release_test_deploy`、`release_status_get`、`release_project_status_get`）参与 `发布门禁`
 - 若对应 MCP 调用失败或结果不明，则对应门禁默认不通过
 
 ### Output Integration Rules
@@ -418,10 +417,12 @@ MCP 调用结果必须参与门禁决策，而不能脱离门禁单独使用：
 MCP 调用结果必须映射到主技能的标准输出物：
 
 - 当前 LLM -> `SRS.md`、`PRD.md`
-- `feasibility` -> 可行性结论、缺失单
+- 本地可行性分析 -> 可行性结论、缺失单
 - `support-ticket` -> 技术支持工单、状态更新、恢复建议
+- `implementation-init` -> `projectId`、`gitlabProjectUrl`、`gitlabProjectToken`、开发项目记录
 - `build` -> 静态分析结果、编译结果、安全扫描结果
-- `release` -> `projectId`、测试环境发布结果、项目状态、上线申请结果
+- `release` -> `pluginId`、测试环境发布结果、项目审核状态、上线申请结果
+- `runtime-info` -> 插件实例信息、插件配置、运行时日志、生命周期事件
 - `workflow` -> 状态变更记录、阻塞态、恢复态、终态同步结果
 
 ### Capability Failure Rules
@@ -444,11 +445,14 @@ MCP 调用结果必须映射到主技能的标准输出物：
 
 主技能应按以下优先级理解 MCP 调用顺序：
 
-1. 在 Requirements Stage 与 PRD Stage，由当前 LLM 直接生成和更新文档
-2. 从 Feasibility Analysis Stage 开始，先调用 `workflow` 明确当前状态与目标动作
-3. 再调用当前阶段对应的主能力分组
-4. 如需更新阻塞态或恢复态，再次调用 `workflow`
-5. 如需跨阶段推进，必须先通过对应门禁再切换能力分组
+1. 在 Requirements Stage 与 PRD Stage，由当前 LLM 直接生成和更新文档（不调 MCP）
+2. 首次进入 Feasibility Analysis Stage 时，本地生成 `workflowId`（可借助 `plugin_mcp_util_snowflake_id`）
+3. 完成本地 `plugin-dev-kit` 可行性分析后，优先调用 `plugin_mcp_workflow_state_update` / `plugin_mcp_workflow_block` 将结论写入服务端
+4. 如存在缺失项，调用 `plugin_mcp_support_ticket_create` 并推动到 `support_ticket_open`；工单处理中使用 `query` / `update`；解决后 `recovery_check` + `workflow_resume`
+5. 进入 Implementation Stage 时，先调 `plugin_mcp_implementation_project_init`，拿到 `projectId` 后进入编码与门禁
+6. 进入 Release And Test Stage 时，依次执行 `plugin_mcp_build_static_analysis` → `plugin_mcp_build_security_scan` → `plugin_mcp_release_test_deploy`；必要时用 `release_status_get` / `release_log_query` 追踪
+7. 人工测试通过后，调 `plugin_mcp_release_project_status_get` 确认 `audit_phase`，再调 `plugin_mcp_release_launch_apply` 提交上线；如需撤回用 `plugin_mcp_release_launch_cancel`
+8. 任一阶段发生阻塞时，先调 `plugin_mcp_workflow_block`、解阻后调 `plugin_mcp_workflow_resume`，避免状态靠文字传递
 
 ### Future Extension Rules
 
