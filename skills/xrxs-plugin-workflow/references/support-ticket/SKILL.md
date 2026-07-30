@@ -216,7 +216,12 @@ version: "0.2.0"
    - `plugin_mcp_workflow_block(workflowId, blockedState="feasibility_blocked" 或其它对应阶段阻塞态, reason="...")`
    - 若上游子技能已完成 `workflow_block`，本子技能不重复调用，仅需确认
 2. **创建工单**
-   - `plugin_mcp_support_ticket_create(workflowId, ticketType, title, description, priority, missingItems, ...)`
+   - `plugin_mcp_support_ticket_create(workflowId, requestId, projectName, ticketType, title, description, impactLevel, blocking, gapItems, ...)`
+   - 必填参数为 `workflowId`、`requestId`、`projectName`、`title`、`gapItems`
+   - `projectName` 取 PRD 中的插件/项目名称即可，本阶段无需存在已初始化的开发项目
+   - `projectId` 为可选参数：仅当项目已由 `implementation-init` 初始化时传入，服务端会同步把项目阶段置为 `10=可行性阻塞`；未传或同步失败时，响应中 `phaseSynced=false` 且附 `phaseSyncMessage`，不影响工单创建
+   - **禁止**为了凑出 `projectId` 而在本阶段调用 `plugin_mcp_implementation_project_init`
+   - `gapItems` 元素可为字符串（直接描述缺失能力），也可为对象（`gapType` / `featureName` / `requiredCapability` / `impactLevel` / `reason` / `suggestion`）
    - `ticketType` 必须属于：`pointcut-support` / `business-api-support` / `mixed-support` / `workflow-blocker`
    - 创建成功后获得 `ticketId`，与 `workflowId` 一同入库，后续所有操作必须带上 `ticketId`
 3. **跟踪与更新**
