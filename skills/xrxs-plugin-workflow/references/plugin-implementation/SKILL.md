@@ -2,7 +2,7 @@
 name: "plugin-implementation"
 description: "Implements XRXS plugins from approved PRDs and feasibility results. Use when requirements are confirmed and the workflow is ready to build plugin code and configuration."
 description_zh: "根据已确认的 PRD 和可行性结论实现 XRXS 插件代码。适用于需求与可行性均已明确，准备进入项目初始化、代码开发、配置生成和工程落地的阶段。"
-version: "0.4.0"
+version: "0.5.0"
 ---
 
 # Plugin Implementation
@@ -230,6 +230,21 @@ git pull
 - 禁止使用其他 package（如 `com.xrxs.plugin.*` 或按业务自拟的 package）
 - 禁止省略 `package` 声明
 
+### Backend Java Logging Rules
+
+插件的 Java 代码会被宿主动态编译，`LoggerFactory.getLogger` 不能使用 class 类型参数，必须使用字符串类型参数：
+
+```java
+// 错误写法：动态编译场景下禁止传 class
+private static final Logger log = LoggerFactory.getLogger(IdCodeVerifyHandler.class);
+
+// 正确写法：传类名字符串
+private static final Logger log = LoggerFactory.getLogger("IdCodeVerifyHandler");
+```
+
+- 字符串参数统一使用当前类的类名
+- 同理禁止 `getLogger(getClass())`、Lombok `@Slf4j` 等一切依赖 class 引用的日志声明方式
+
 ### Structure Validation Rules
 
 - 每个实际使用的织入点都必须在 `endpoints/` 下有对应配置文件
@@ -315,6 +330,7 @@ README.md 建议至少覆盖以下信息：
 - 重点检查 `src/backend/` 与 `endpoints/*.yml`
 - Java 类、接口、入参、返回值必须来自 `plugin-dev-kit/docs/pointcut` 或 `src/plugin-opensdk`
 - Java 类 package 统一为 `xrxs.plugin`，文件直接平铺在 `src/backend/` 下
+- 日志声明必须使用 `LoggerFactory.getLogger("类名字符串")`，禁止传 class 参数
 - 后端实现类必须按宿主要求注册为 Spring Bean
 
 ### `纯前端插件`
@@ -392,6 +408,7 @@ README.md 建议至少覆盖以下信息：
 - 校验每一项是否有明确文档出处
 - 列出 import 清单，并确认包路径有依据
 - 校验所有 Java 类的 package 是否为 `xrxs.plugin`，文件是否直接位于 `src/backend/` 下
+- 校验所有 Java 类的 Logger 声明是否使用字符串参数（非 class 参数）
 - 校验 `scriptLanguage` 与实现语言一致
 - 校验方法签名、入参、返回值与文档一致
 - 校验目录结构、`manifest.yml`、`endpoints/*.yml` 是否与插件开发类型一致
@@ -538,6 +555,7 @@ README.md 建议至少覆盖以下信息：
 - 是否新增了无依据实现
 - 是否遗漏配置注册、文档同步或结构修正
 - Java 类 package 是否均为 `xrxs.plugin`，且未出现 package 目录嵌套
+- 日志声明是否均为 `LoggerFactory.getLogger("类名字符串")`，未出现 class 参数或 `@Slf4j`
 - 是否引入明显性能、安全、可用性问题
 
 ### Gate 3: Optional Static Analysis / Security Scan
